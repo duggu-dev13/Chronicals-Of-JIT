@@ -1,43 +1,37 @@
-# Example file showing a circle moving on screen
-import pygame
+import pygame, sys
 
-# pygame setup
+mainClock = pygame.time.Clock()
+from pygame.locals import *
 pygame.init()
-screen = pygame.display.set_mode((1280, 720))
-clock = pygame.time.Clock()
-running = True
-dt = 0
+pygame.display.set_caption("Base Game")
+monitor_size = [pygame.display.Info().current_w, pygame.display.Info().current_h]
+screen = pygame.display.set_mode((500, 500), pygame.RESIZABLE)
 
-player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
+fullscreen = False
 
-while running:
-    # poll for events
-    # pygame.QUIT event means the user clicked X to close your window
+while True:
+    screen.fill((0, 0, 50))
+
+    pygame.draw.rect(screen, (255, 0, 0), pygame.Rect(screen.get_width() - 5 - (screen.get_width() / 5), 50, screen.get_width() / 5, 50))
+
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    # fill the screen with a color to wipe away anything from last frame
-    screen.fill("purple")
-
-    pygame.draw.circle(screen, "red", player_pos, 40)
-
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_w]:
-        player_pos.y -= 300 * dt
-    if keys[pygame.K_s]:
-        player_pos.y += 300 * dt
-    if keys[pygame.K_a]:
-        player_pos.x -= 300 * dt
-    if keys[pygame.K_d]:
-        player_pos.x += 300 * dt
-
-    # flip() the display to put your work on screen
-    pygame.display.flip()
-
-    # limits FPS to 60
-    # dt is delta time in seconds since last frame, used for framerate-
-    # independent physics.
-    dt = clock.tick(60) / 1000
-
-pygame.quit()
+        if event.type == QUIT:
+            pygame.quit()
+            sys.exit()
+        if event.type == VIDEORESIZE:
+            if not fullscreen:
+                screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+        if event.type == KEYDOWN:
+            if event.key == K_ESCAPE:
+                pygame.quit()
+                exit() 
+            if event.key == K_f:
+                fullscreen = not fullscreen
+                if fullscreen:
+                    screen = pygame.display.set_mode(monitor_size, pygame.FULLSCREEN)
+                else:
+                    screen = pygame.display.set_mode((screen.get_width(), screen.get_height()), pygame.RESIZABLE)
+    
+    
+    pygame.display.update()
+    mainClock.tick(60)
