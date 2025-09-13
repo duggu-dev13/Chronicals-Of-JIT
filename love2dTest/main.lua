@@ -143,5 +143,6 @@ function love.draw()
             cam.scale / 3,
             16, 16
         )
+        
     cam:detach()
 end
