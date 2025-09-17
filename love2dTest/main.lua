@@ -1,148 +1,135 @@
+-- main.lua
+local anim8 = require 'libraries/anim8'
+local sti = require 'libraries/sti'
+local camera = require 'libraries/camera'
+local wf = require 'libraries/windfield'
+
+-- Globals
+local cam, world, gameMap, player, walls = nil, nil, nil, nil, {}
+local width, height = love.window.getDesktopDimensions(1)
+local windowWidth, windowHeight = math.floor(width * 0.9), math.floor(height * 0.9)
+
 function love.load()
-    anim8 = require 'libraries/anim8'
-    
-    sti = require 'libraries/sti'
-    gameMap = sti('maps/tileSet.lua')
-
-    camera = require 'libraries/camera'
-    cam = camera()
-    
-    wf = require 'libraries/windfield'
-
-    world = wf.newWorld(0, 0)
-
-    -- Get the desktop dimensions (1wad for primary monitor)
-    local width, height = love.window.getDesktopDimensions(1)
-    
-    -- Set the window size to 80% of desktop dimensions
-    local windowWidth = math.floor(width * 0.9)
-    local windowHeight = math.floor(height * 0.9)
-    love.window.setMode(windowWidth, windowHeight, {
-        resizable = true,
-        fullscreen = false
-    })
-
+    -- Window setup
+    love.window.setMode(windowWidth, windowHeight, { resizable = true, fullscreen = false })
     love.graphics.setDefaultFilter("nearest", "nearest")
 
+    -- Map & physics
+    gameMap = sti('maps/tileSet.lua')
+    world = wf.newWorld(0, 0, true)
+
+    -- Camera
+    cam = camera()
     cam.scale = 4
 
-    -- Player object
-    player = {}
-    player.collider = world:newBSGRectangleCollider(100, 100, 18, 35, 4)
-    player.collider:setFixedRotation(true)
-    -- Set the player's starting position to the center of the first tile
-    player.x = 400
-    player.y = 200
+    -- Player setup
+    initPlayer()
 
-    -- Player object
-    player.walkingSpeed = 50
-    player.animSpeed = 0.1
-    player.spriteSheet = love.graphics.newImage("sprites/Teacher_1_walk-Sheet.png")  
-    
-    player.grid = anim8.newGrid(32, 32, player.spriteSheet:getWidth(), player.spriteSheet:getHeight())
-
-    player.animations= {}
-    player.animations.down = anim8.newAnimation(player.grid('1-6', 4), player.animSpeed)
-    player.animations.up = anim8.newAnimation(player.grid('1-6', 2), player.animSpeed)
-    player.animations.left = anim8.newAnimation(player.grid('1-6', 1), player.animSpeed)
-    player.animations.right = anim8.newAnimation(player.grid('1-6', 3), player.animSpeed)
-
-    player.anim = player.animations.down
-    walls = {}
-
-    if gameMap.layers["Walls"] then
-        for i, obj in pairs(gameMap.layers["Walls"].objects) do 
-            local  wall = world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
-            wall:setType("static")
-            table.insert(walls, wall)
-        end
-    end
+    -- Map walls
+    initWalls()
 end
 
-function love.update(dt)
-    
+-- ===================== PLAYER =====================
+function initPlayer()
+    player = {
+        x = windowWidth * 0.2,
+        y = windowHeight * 0.2,
+        walkingSpeed = 50,
+        animSpeed = 0.1,
+        spriteSheet = love.graphics.newImage("sprites/Teacher_1_walk-Sheet.png")
+    }
+
+    -- Collider
+    player.collider = world:newBSGRectangleCollider(player.x, player.y, 18, 35, 4)
+    player.collider:setFixedRotation(true)
+
+    -- Animations
+    local grid = anim8.newGrid(32, 32, player.spriteSheet:getWidth(), player.spriteSheet:getHeight())
+    player.animations = {
+        down  = anim8.newAnimation(grid('1-6', 4), player.animSpeed),
+        up    = anim8.newAnimation(grid('1-6', 2), player.animSpeed),
+        left  = anim8.newAnimation(grid('1-6', 1), player.animSpeed),
+        right = anim8.newAnimation(grid('1-6', 3), player.animSpeed)
+    }
+    player.anim = player.animations.down
+end
+
+function updatePlayer(dt)
+    local vx, vy = 0, 0
     local isMoving = false
 
-    local vx = 0
-    local vy = 0
-    
-    if love.keyboard.isDown('w') then
-        vy = player.walkingSpeed * -1
-        player.anim = player.animations.up
-        isMoving = true
-    end
-    if love.keyboard.isDown('s') then
-        vy = player.walkingSpeed
-        player.anim = player.animations.down
-        isMoving = true
-    end
-    if love.keyboard.isDown('d') then
-        vx = player.walkingSpeed
-        player.anim = player.animations.right
-        isMoving = true
-    end
-    if love.keyboard.isDown('a') then
-        vx = player.walkingSpeed * -1
-        player.anim = player.animations.left
-        isMoving = true
-    end
+    if love.keyboard.isDown('w') then vy = -player.walkingSpeed; player.anim = player.animations.up; isMoving = true end
+    if love.keyboard.isDown('s') then vy =  player.walkingSpeed; player.anim = player.animations.down; isMoving = true end
+    if love.keyboard.isDown('d') then vx =  player.walkingSpeed; player.anim = player.animations.right; isMoving = true end
+    if love.keyboard.isDown('a') then vx = -player.walkingSpeed; player.anim = player.animations.left; isMoving = true end
 
     player.collider:setLinearVelocity(vx, vy)
+    if not isMoving then player.anim:gotoFrame(1) end
 
-    if isMoving == false then
-        player.anim:gotoFrame(1)
-    end
-    
-    world:update(dt)
-    player.x = player.collider:getX() + 2 -- Manual Adjusting offset of Collider
-    player.y = player.collider:getY()
-
+    player.x, player.y = player.collider:getX() + 2, player.collider:getY()
     player.anim:update(dt)
+end
 
-    cam:lookAt(player.x, player.y)
+function drawPlayer()
+    player.anim:draw(
+        player.spriteSheet,
+        player.x, player.y,
+        nil,
+        cam.scale / 3, cam.scale / 3,
+        16, 16
+    )
+end
 
-    local windowWidth = love.graphics.getWidth()
-    local windowHeight = love.graphics.getHeight()
-
-    local mapWidth = gameMap.width * gameMap.tilewidth
-    local mapHeight = gameMap.height * gameMap.tileheight
-
-    if cam.x < (windowWidth / (2 * cam.scale)) then 
-        cam.x = (windowWidth / (2 * cam.scale))
-    end
-
-    if cam.y < (windowHeight / (2 * cam.scale)) then 
-        cam.y = (windowHeight / (2 * cam.scale))
-    end
-
-    if cam.x > (mapWidth - (windowWidth / (2 * cam.scale))) then 
-        cam.x = (mapWidth - (windowWidth / (2 * cam.scale)))
-    end
-
-    if cam.y > (mapHeight - (windowHeight / (2 * cam.scale))) then 
-        cam.y = (mapHeight - (windowHeight / (2 * cam.scale)))
+-- ===================== MAP WALLS =====================
+function initWalls()
+    if not gameMap.layers["Walls"] then return end
+    for _, obj in pairs(gameMap.layers["Walls"].objects) do
+        local wall = world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
+        wall:setType("static")
+        table.insert(walls, wall)
     end
 end
 
+-- ===================== CAMERA =====================
+function updateCamera()
+    cam:lookAt(player.x, player.y)
 
+    local windowWidth, windowHeight = love.graphics.getWidth(), love.graphics.getHeight()
+    local mapWidth, mapHeight = gameMap.width * gameMap.tilewidth, gameMap.height * gameMap.tileheight
+
+    -- Clamp camera inside map bounds
+    cam.x = math.max(windowWidth / (2 * cam.scale), math.min(cam.x, mapWidth - (windowWidth / (2 * cam.scale))))
+    cam.y = math.max(windowHeight / (2 * cam.scale), math.min(cam.y, mapHeight - (windowHeight / (2 * cam.scale))))
+end
+
+-- ===================== LOVE CALLBACKS =====================
+function love.update(dt)
+    world:update(dt)
+    updatePlayer(dt)
+    updateCamera()
+end
 
 function love.draw()
-    cam:attach() -- Pass the scale factor to the camera
-        gameMap:drawLayer(gameMap.layers['Base Floor'])
-        gameMap:drawLayer(gameMap.layers['Base Stage Floor'])
-        gameMap:drawLayer(gameMap.layers['Floor and Wall Objects'])
-        gameMap:drawLayer(gameMap.layers['Base Wall'])
-        gameMap:drawLayer(gameMap.layers['Windows'])
-        gameMap:drawLayer(gameMap.layers['Wall Objects'])
-        gameMap:drawLayer(gameMap.layers['Benches and Vegetation'])
-        player.anim:draw(
-            player.spriteSheet,
-            player.x, player.y,
-            nil,
-            cam.scale / 3,
-            cam.scale / 3,
-            16, 16
-        )
-        
+    cam:attach()
+        drawMap()
+        drawPlayer()
     cam:detach()
+end
+
+-- ===================== DRAW MAP =====================
+function drawMap()
+    local layers = {
+        'Base Floor',
+        'Base Stage Floor',
+        'Floor and Wall Objects',
+        'Base Wall',
+        'Windows',
+        'Wall Objects',
+        'Benches and Vegetation'
+    }
+    for _, layer in ipairs(layers) do
+        if gameMap.layers[layer] then
+            gameMap:drawLayer(gameMap.layers[layer])
+        end
+    end
 end
