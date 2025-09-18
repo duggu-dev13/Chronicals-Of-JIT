@@ -1,17 +1,16 @@
--- main.lua
-local anim8 = require 'libraries/anim8'
 local sti = require 'libraries/sti'
 local camera = require 'libraries/camera'
 local wf = require 'libraries/windfield'
+local Player = require 'modules/player'  -- import our module
 
--- Globals
 local cam, world, gameMap, player, walls = nil, nil, nil, nil, {}
-local width, height = love.window.getDesktopDimensions(1)
-local windowWidth, windowHeight = math.floor(width * 0.9), math.floor(height * 0.9)
+local benchRects = {}
+local debugDraw = false
 
 function love.load()
     -- Window setup
-    love.window.setMode(windowWidth, windowHeight, { resizable = true, fullscreen = false })
+    local width, height = love.window.getDesktopDimensions(1)
+    love.window.setMode(math.floor(width * 0.9), math.floor(height * 0.9), { resizable = true, fullscreen = false })
     love.graphics.setDefaultFilter("nearest", "nearest")
 
     -- Map & physics
@@ -22,71 +21,51 @@ function love.load()
     cam = camera()
     cam.scale = 4
 
-    -- Player setup
-    initPlayer()
+    -- Player
+    player = Player:new(world)
 
-    -- Map walls
+    -- Walls
     initWalls()
 end
 
--- ===================== PLAYER =====================
-function initPlayer()
-    player = {
-        x = windowWidth * 0.2,
-        y = windowHeight * 0.2,
-        walkingSpeed = 50,
-        animSpeed = 0.1,
-        spriteSheet = love.graphics.newImage("sprites/Teacher_1_walk-Sheet.png")
-    }
-
-    -- Collider
-    player.collider = world:newBSGRectangleCollider(player.x, player.y, 18, 35, 4)
-    player.collider:setFixedRotation(true)
-
-    -- Animations
-    local grid = anim8.newGrid(32, 32, player.spriteSheet:getWidth(), player.spriteSheet:getHeight())
-    player.animations = {
-        down  = anim8.newAnimation(grid('1-6', 4), player.animSpeed),
-        up    = anim8.newAnimation(grid('1-6', 2), player.animSpeed),
-        left  = anim8.newAnimation(grid('1-6', 1), player.animSpeed),
-        right = anim8.newAnimation(grid('1-6', 3), player.animSpeed)
-    }
-    player.anim = player.animations.down
+function love.update(dt)
+    world:update(dt)
+    player:update(dt)
+    updateCamera()
 end
 
-function updatePlayer(dt)
-    local vx, vy = 0, 0
-    local isMoving = false
-
-    if love.keyboard.isDown('w') then vy = -player.walkingSpeed; player.anim = player.animations.up; isMoving = true end
-    if love.keyboard.isDown('s') then vy =  player.walkingSpeed; player.anim = player.animations.down; isMoving = true end
-    if love.keyboard.isDown('d') then vx =  player.walkingSpeed; player.anim = player.animations.right; isMoving = true end
-    if love.keyboard.isDown('a') then vx = -player.walkingSpeed; player.anim = player.animations.left; isMoving = true end
-
-    player.collider:setLinearVelocity(vx, vy)
-    if not isMoving then player.anim:gotoFrame(1) end
-
-    player.x, player.y = player.collider:getX() + 2, player.collider:getY()
-    player.anim:update(dt)
+function love.draw()
+    cam:attach()
+        drawSceneWithDepth()
+        if debugDraw then
+            love.graphics.setColor(0, 1, 0, 0.8)
+            world:draw()
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    cam:detach()
 end
 
-function drawPlayer()
-    player.anim:draw(
-        player.spriteSheet,
-        player.x, player.y,
-        nil,
-        cam.scale / 3, cam.scale / 3,
-        16, 16
-    )
-end
-
--- ===================== MAP WALLS =====================
+-- ===================== WALLS =====================
 function initWalls()
     if not gameMap.layers["Walls"] then return end
     for _, obj in pairs(gameMap.layers["Walls"].objects) do
         local wall = world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
         wall:setType("static")
         table.insert(walls, wall)
+
+        -- Heuristic: treat small rectangles as bench tops for depth masking
+        if obj.width <= 40 and obj.height <= 40 then
+            table.insert(benchRects, {
+                x = obj.x, y = obj.y, w = obj.width, h = obj.height
+            })
+        end
+    end
+end
+
+-- ===================== INPUT =====================
+function love.keypressed(key)
+    if key == 'f1' then
+        debugDraw = not debugDraw
     end
 end
 
@@ -102,21 +81,7 @@ function updateCamera()
     cam.y = math.max(windowHeight / (2 * cam.scale), math.min(cam.y, mapHeight - (windowHeight / (2 * cam.scale))))
 end
 
--- ===================== LOVE CALLBACKS =====================
-function love.update(dt)
-    world:update(dt)
-    updatePlayer(dt)
-    updateCamera()
-end
-
-function love.draw()
-    cam:attach()
-        drawMap()
-        drawPlayer()
-    cam:detach()
-end
-
--- ===================== DRAW MAP =====================
+-- ===================== MAP DRAWING =====================
 function drawMap()
     local layers = {
         'Base Floor',
@@ -130,6 +95,64 @@ function drawMap()
     for _, layer in ipairs(layers) do
         if gameMap.layers[layer] then
             gameMap:drawLayer(gameMap.layers[layer])
+        end
+    end
+end
+
+-- Draw scene with benches depth-sorted against player using world-space stencil
+function drawSceneWithDepth()
+    -- Draw all layers except benches
+    local layersBefore = {
+        'Base Floor',
+        'Base Stage Floor',
+        'Floor and Wall Objects',
+        'Base Wall',
+        'Windows',
+        'Wall Objects'
+    }
+    for _, layer in ipairs(layersBefore) do
+        if gameMap.layers[layer] then
+            gameMap:drawLayer(gameMap.layers[layer])
+        end
+    end
+
+    local benchesLayer = gameMap.layers['Benches and Vegetation']
+    if not benchesLayer then
+        -- Fallback: no benches layer, just draw player and return
+        player:draw(cam.scale)
+        return
+    end
+
+    -- Player bottom Y in world coords (32px sprite with origin at 16,16)
+    local playerBottomY = player.y + 16
+
+    -- Margin so stencil fully covers the bench sprites around the collider top
+    local margin = 32
+
+    -- Draw benches whose collider top is above player's bottom (behind player)
+    for _, r in ipairs(benchRects) do
+        if r.y < playerBottomY then
+            love.graphics.stencil(function()
+                love.graphics.rectangle('fill', r.x - margin, r.y - margin, r.w + margin * 2, r.h + margin * 2)
+            end, 'replace', 1)
+            love.graphics.setStencilTest('equal', 1)
+            gameMap:drawLayer(benchesLayer)
+            love.graphics.setStencilTest()
+        end
+    end
+
+    -- Draw player between the two groups
+    player:draw(cam.scale)
+
+    -- Draw benches whose collider top is at/under player's bottom (in front of player)
+    for _, r in ipairs(benchRects) do
+        if r.y >= playerBottomY then
+            love.graphics.stencil(function()
+                love.graphics.rectangle('fill', r.x - margin, r.y - margin, r.w + margin * 2, r.h + margin * 2)
+            end, 'replace', 1)
+            love.graphics.setStencilTest('equal', 1)
+            gameMap:drawLayer(benchesLayer)
+            love.graphics.setStencilTest()
         end
     end
 end
