@@ -9,11 +9,15 @@ function Player:new(world)
     -- Player setup
     obj.x, obj.y = 200, 100
     obj.walkingSpeed = 50
-    obj.animSpeed = 0.1
+    obj.animSpeed = 0.08
     obj.spriteSheet = love.graphics.newImage("sprites/Teacher_1_walk-Sheet.png")
+    
+    -- Sound setup
+    obj.sounds = {}
+    obj.sounds.footstep = love.audio.newSource('sounds/female_footsteps.mp3', 'stream')
 
     -- Collider
-    obj.collider = world:newBSGRectangleCollider(obj.x, obj.y, 18, 35, 4)
+    obj.collider = world:newBSGRectangleCollider(obj.x, obj.y, 15, 10, 4)
     obj.collider:setFixedRotation(true)
 
     -- Animations
@@ -40,9 +44,18 @@ function Player:update(dt)
     if love.keyboard.isDown('a') then vx = -self.walkingSpeed; self.anim = self.animations.left; isMoving = true end
 
     self.collider:setLinearVelocity(vx, vy)
-    if not isMoving then self.anim:gotoFrame(1) end
+    if not isMoving then
+        self.anim:gotoFrame(1)
+        if self.sounds.footstep:isPlaying() then
+            self.sounds.footstep:stop()
+        end
+    else
+        if not self.sounds.footstep:isPlaying() then
+            self.sounds.footstep:play()
+        end
+    end
 
-    self.x, self.y = self.collider:getX() + 2, self.collider:getY()
+    self.x, self.y = self.collider:getX() + 2, self.collider:getY() - 15
     self.anim:update(dt)
 end
 

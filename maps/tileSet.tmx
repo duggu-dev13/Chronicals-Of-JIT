@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="14" height="11" tilewidth="32" tileheight="32" infinite="0" nextlayerid="10" nextobjectid="20">
+<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="14" height="11" tilewidth="32" tileheight="32" infinite="0" nextlayerid="13" nextobjectid="132">
  <editorsettings>
   <export target="tileSet.lua" format="lua"/>
  </editorsettings>
  <tileset firstgid="1" name="tileSet" tilewidth="32" tileheight="32" tilecount="961" columns="31">
-  <image source="classroom.png" width="1000" height="1000"/>
+  <image source="Classroom.png" width="1000" height="1000"/>
  </tileset>
  <layer id="1" name="Base Floor" width="14" height="11">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-255,255,255,256,0,0,0,0,0,0,0,0,0,0,
-0,255,255,255,255,255,256,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 202,202,202,202,202,202,202,202,202,202,202,202,202,202,
 409,410,409,410,409,410,409,410,409,410,325,410,409,410,
 378,379,378,379,378,379,378,379,378,379,356,379,378,379,
@@ -39,8 +39,8 @@
  <layer id="4" name="Floor and Wall Objects" width="14" height="11">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-255,256,256,256,256,0,0,0,0,0,0,0,0,0,
-255,255,255,256,256,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,130,
@@ -92,39 +92,284 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,0,0,0,0,0,0,0,0
+0,0,0,0,0,102,102,102,102,102,0,0,0,0,
+0,0,0,0,0,0,0,102,0,0,0,0,0,0
 </data>
  </layer>
- <layer id="6" name="Benches and Vegetation" width="14" height="11">
-  <data encoding="csv">
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-38,0,0,0,0,0,0,0,0,0,0,0,0,39,
-0,72,0,72,0,72,0,72,0,0,0,8,0,0,
-0,103,0,103,0,103,0,103,0,0,0,3,0,0,
-0,72,0,72,0,72,0,72,0,0,0,0,0,0,
-0,103,0,103,0,103,0,103,0,0,0,0,0,0,
-0,72,0,72,0,72,0,72,0,0,0,7,0,0,
-0,103,0,103,0,103,0,103,0,0,0,0,0,0,
-7,0,0,0,0,0,0,0,0,0,0,0,0,38
-</data>
- </layer>
+ <objectgroup id="12" name="Benches and Vegetation">
+  <properties>
+   <property name="depthMask " value="True"/>
+  </properties>
+  <object id="87" gid="38" x="0" y="128" width="32" height="32">
+   <properties>
+    <property name="benchId" value="1"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="88" gid="38" x="416" y="352" width="32" height="32">
+   <properties>
+    <property name="benchId" value="4"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="89" gid="7" x="0" y="352" width="32" height="32">
+   <properties>
+    <property name="benchId" value="3"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="90" gid="7" x="352" y="288" width="32" height="32">
+   <properties>
+    <property name="benchId" value="5"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="91" gid="8" x="352" y="160" width="32" height="32">
+   <properties>
+    <property name="benchId" value="6"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="92" gid="39" x="416" y="128" width="32" height="32">
+   <properties>
+    <property name="benchId" value="2"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="93" gid="3" x="352" y="192" width="32" height="32">
+   <properties>
+    <property name="benchId" value="7"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="94" gid="72" x="32" y="160" width="32" height="32">
+   <properties>
+    <property name="benchId" value="8"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="95" gid="72" x="96" y="160" width="32" height="32">
+   <properties>
+    <property name="benchId" value="9"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="96" gid="72" x="160" y="160" width="32" height="32">
+   <properties>
+    <property name="benchId" value="10"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="97" gid="72" x="224" y="160" width="32" height="32">
+   <properties>
+    <property name="benchId" value="11"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="98" gid="72" x="224" y="224" width="32" height="32">
+   <properties>
+    <property name="benchId" value="15"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="99" gid="72" x="160" y="224" width="32" height="32">
+   <properties>
+    <property name="benchId" value="14"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="100" gid="72" x="96" y="224" width="32" height="32">
+   <properties>
+    <property name="benchId" value="13"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="101" gid="72" x="32" y="224" width="32" height="32">
+   <properties>
+    <property name="benchId" value="12"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="102" gid="72" x="32" y="288" width="32" height="32">
+   <properties>
+    <property name="benchId" value="16"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="103" gid="72" x="96" y="288" width="32" height="32">
+   <properties>
+    <property name="benchId" value="17"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="104" gid="72" x="160" y="288" width="32" height="32">
+   <properties>
+    <property name="benchId" value="18"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="105" gid="72" x="224" y="288" width="32" height="32">
+   <properties>
+    <property name="benchId" value="19"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="106" gid="103" x="32" y="192" width="32" height="32">
+   <properties>
+    <property name="benchId" value="8"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="107" gid="103" x="96" y="192" width="32" height="32">
+   <properties>
+    <property name="benchId" value="9"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="108" gid="103" x="160" y="192" width="32" height="32">
+   <properties>
+    <property name="benchId" value="10"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="109" gid="103" x="224" y="192" width="32" height="32">
+   <properties>
+    <property name="benchId" value="11"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="110" gid="103" x="224" y="256" width="32" height="32">
+   <properties>
+    <property name="benchId" value="15"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="111" gid="103" x="160" y="256" width="32" height="32">
+   <properties>
+    <property name="benchId" value="14"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="112" gid="103" x="96" y="256" width="32" height="32">
+   <properties>
+    <property name="benchId" value="13"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="114" gid="103" x="32" y="256" width="32" height="32">
+   <properties>
+    <property name="benchId" value="12"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="115" gid="103" x="32" y="320" width="32" height="32">
+   <properties>
+    <property name="benchId" value="16"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="116" gid="103" x="96" y="320" width="32" height="32">
+   <properties>
+    <property name="benchId" value="17"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="117" gid="103" x="160" y="320" width="32" height="32">
+   <properties>
+    <property name="benchId" value="18"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="118" gid="103" x="224" y="320" width="32" height="32">
+   <properties>
+    <property name="benchId" value="19"/>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="119" gid="102" x="232" y="283" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="120" gid="102" x="258" y="308" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="121" gid="102" x="238" y="330" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="122" gid="102" x="189" y="368" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="123" gid="102" x="92" y="410" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="124" gid="102" x="127" y="-37" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="125" gid="102" x="260" y="158" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="126" gid="102" x="263" y="190" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="127" gid="102" x="306" y="132" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="128" gid="102" x="477" y="45" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="129" gid="102" x="468" y="-1" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="130" gid="102" x="263" y="148" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+  <object id="131" gid="102" x="299" y="121" width="32" height="32">
+   <properties>
+    <property name="depthMask" value="true"/>
+   </properties>
+  </object>
+ </objectgroup>
  <objectgroup id="9" name="Walls" visible="0">
-  <object id="3" x="0" y="0" width="447" height="61"/>
-  <object id="7" x="35" y="151" width="26" height="27"/>
-  <object id="14" x="35" y="215" width="26" height="27"/>
-  <object id="18" x="35" y="279" width="26" height="27"/>
-  <object id="8" x="99" y="151" width="26" height="27"/>
-  <object id="13" x="99" y="215" width="26" height="27"/>
-  <object id="17" x="99" y="279" width="26" height="27"/>
-  <object id="9" x="163" y="151" width="26" height="27"/>
-  <object id="12" x="163" y="215" width="26" height="27"/>
-  <object id="16" x="163" y="279" width="26" height="27"/>
-  <object id="10" x="227" y="151" width="26" height="27"/>
-  <object id="11" x="227" y="215" width="26" height="27"/>
-  <object id="15" x="227" y="279" width="26" height="27"/>
-  <object id="19" x="336" y="152" width="111" height="162"/>
+  <object id="3" x="0" y="0" width="447" height="96"/>
+  <object id="46" x="34" y="152" width="26" height="27"/>
+  <object id="47" x="8" y="115" width="14" height="11"/>
+  <object id="48" x="34" y="216" width="26" height="27"/>
+  <object id="49" x="34" y="280" width="26" height="27"/>
+  <object id="50" x="98" y="152" width="26" height="27"/>
+  <object id="51" x="98" y="216" width="26" height="27"/>
+  <object id="52" x="98" y="280" width="26" height="27"/>
+  <object id="53" x="162" y="152" width="26" height="27"/>
+  <object id="54" x="162" y="216" width="26" height="27"/>
+  <object id="55" x="162" y="280" width="26" height="27"/>
+  <object id="56" x="226" y="152" width="26" height="27"/>
+  <object id="57" x="226" y="216" width="26" height="27"/>
+  <object id="58" x="226" y="280" width="26" height="27"/>
+  <object id="59" x="336" y="155" width="111" height="160"/>
+  <object id="60" x="424" y="115" width="14" height="11"/>
+  <object id="62" x="8" y="338" width="14" height="11"/>
+  <object id="64" x="424" y="339" width="14" height="10"/>
  </objectgroup>
 </map>
