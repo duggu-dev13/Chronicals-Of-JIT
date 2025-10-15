@@ -12,7 +12,7 @@ function Menu:new(stateManager)
         {text = "Settings", action = "settings"},
         {text = "Quit", action = "quit"}
     }
-    obj.title = "Chronicals of the JIT"
+    obj.title = "Chronicals of the JIT: The Game"
     obj.titleFont = nil
     obj.optionFont = nil
     obj.titleY = 0
