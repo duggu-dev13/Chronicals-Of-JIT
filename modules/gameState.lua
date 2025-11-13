@@ -24,10 +24,14 @@ function GameState:new(stateManager)
     obj.isLoading = false
     obj.loadingTimer = 0
     obj.pendingMapLoad = nil
+    obj.selectedCharacter = 'student'
+    obj.playerScaleMultiplier = 1
     obj.mapConfigs = {
         ['maps/college_base_map.lua'] = {
             spawn = { x = 2900, y = 320 },
             simpleDraw = true,
+            playerScale = 2,
+            cameraScale = 2,  -- Zoomed out for campus view
             interactions = {
                 {
                     layer = 'College',
@@ -40,7 +44,8 @@ function GameState:new(stateManager)
         },
         ['maps/tileSet.lua'] = {
             spawn = { x = 200, y = 100 },
-            stageArea = { x = 160, y = 160, w = 200, h = 120 }
+            stageArea = { x = 160, y = 160, w = 200, h = 120 },
+            cameraScale = 4  -- Normal zoom for classroom
         }
     }
     
@@ -59,7 +64,7 @@ end
 function GameState:initGame()
     if not self.cam then
         self.cam = Camera()
-        self.cam.scale = 4
+        self.cam.scale = 2  -- Default zoom (will be overridden by map config)
     end
 
     if not self.sounds.music then
@@ -253,6 +258,37 @@ function GameState:getInteractionConfigs(mapPath)
     return {}
 end
 
+function GameState:setSelectedCharacter(characterId)
+    if Player.characterConfigs[characterId] then
+        self.selectedCharacter = characterId
+    else
+        self.selectedCharacter = 'student'
+    end
+end
+
+function GameState:prepareNewGame(characterId)
+    self:setSelectedCharacter(characterId)
+
+    if self.player and self.player.sounds and self.player.sounds.footstep:isPlaying() then
+        self.player.sounds.footstep:stop()
+    end
+
+    if self.world and self.world.destroy then
+        self.world:destroy()
+    end
+
+    self.world = nil
+    self.gameMap = nil
+    self.player = nil
+    self.currentMapPath = nil
+    self.interactAreas = {}
+    self.currentInteractArea = nil
+    self.stageArea = nil
+    self.isLoading = false
+    self.loadingTimer = 0
+    self.pendingMapLoad = nil
+end
+
 function GameState:collectInteractAreas()
     self.interactAreas = {}
     if not self.gameMap then return end
@@ -302,6 +338,14 @@ function GameState:loadMap(mapPath, spawnOverride)
         self.world:destroy()
     end
 
+    local config = self.mapConfigs[mapPath] or {}
+    self.playerScaleMultiplier = config.playerScale or 1
+
+    -- Apply camera scale from map config
+    if self.cam and config.cameraScale then
+        self.cam.scale = config.cameraScale
+    end
+
     self.currentMapPath = mapPath
     self.gameMap = sti(mapPath)
     self.world = wf.newWorld(0, 0, true)
@@ -323,7 +367,7 @@ function GameState:loadMap(mapPath, spawnOverride)
         x = (spawn and spawn.x) or 200,
         y = (spawn and spawn.y) or 100
     }
-    self.player = Player:new(self.world, validSpawn)
+    self.player = Player:new(self.world, validSpawn, self.selectedCharacter)
 
     if self.cam then
         self.cam:lookAt(self.player.x, self.player.y)
@@ -342,7 +386,7 @@ function GameState:updateInteractState()
 
     local colliderX, colliderY = self.player.collider:getPosition()
     local px = colliderX
-    local py = (self.player.y or colliderY) + 16
+    local py = self.player.getBottomY and self.player:getBottomY() or ((self.player.y or colliderY) + 16)
 
     for _, area in ipairs(self.interactAreas) do
         if px >= area.x and px <= area.x + area.w and py >= area.y and py <= area.y + area.h then
@@ -431,7 +475,8 @@ function GameState:drawSimpleScene()
 
     if self.player then
         love.graphics.setColor(1, 1, 1, 1)
-        self.player:draw(self.cam and self.cam.scale or 1)
+        local cameraScale = self.cam and self.cam.scale or 1
+        self.player:draw(cameraScale, self.playerScaleMultiplier)
     end
 end
 
@@ -443,6 +488,10 @@ function GameState:drawSceneWithDepth()
     local config = self.mapConfigs[self.currentMapPath or ""]
     if config and config.simpleDraw then
         self:drawSimpleScene()
+        return
+    end
+
+    if not self.player then
         return
     end
 
@@ -467,8 +516,7 @@ function GameState:drawSceneWithDepth()
     local floorObjectsLayer = self.gameMap.layers['Floor and Wall Objects']
     local wallObjectsLayer = self.gameMap.layers['Wall Objects']
     
-    -- Player bottom Y in world coords (32px sprite with origin at 16,16)
-    local playerBottomY = self.player.y + 16
+    local playerBottomY = self.player.getBottomY and self.player:getBottomY() or (self.player.y + 16)
 
     -- Margin so stencil fully covers the sprites around the collider top
     local margin = 32
@@ -517,7 +565,7 @@ function GameState:drawSceneWithDepth()
 
     -- Draw player between the two groups
     love.graphics.setColor(1, 1, 1, 1) -- Reset color before drawing player
-    self.player:draw(self.cam.scale)
+    self.player:draw(self.cam.scale, self.playerScaleMultiplier)
 
     -- Check if player is below the stage area
     local stageInFrontPlayer = false
