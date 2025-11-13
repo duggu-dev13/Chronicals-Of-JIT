@@ -127,7 +127,7 @@ function Menu:selectOption()
     if option.action == "play" then
         self.stateManager:setState("game")
     elseif option.action == "settings" then
-        -- TODO: Implement settings menu
+        -- TODO: Implement settings menuL
         print("Settings not implemented yet")
     elseif option.action == "quit" then
         love.event.quit()

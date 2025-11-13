@@ -3,11 +3,17 @@ local anim8 = require 'libraries/anim8'
 
 local Player = {}
 
-function Player:new(world)
+local function copySpawn(spawn)
+    if not spawn then return nil end
+    return { x = spawn.x, y = spawn.y }
+end
+
+function Player:new(world, spawn)
     local obj = {}
 
     -- Player setup
-    obj.x, obj.y = 200, 100
+    local spawnPos = copySpawn(spawn) or { x = 200, y = 100 }
+    obj.x, obj.y = spawnPos.x, spawnPos.y
     obj.walkingSpeed = 50
     obj.animSpeed = 0.08
     obj.spriteSheet = love.graphics.newImage("sprites/Teacher_1_walk-Sheet.png")
@@ -32,7 +38,13 @@ function Player:new(world)
 
     setmetatable(obj, self)
     self.__index = self
+    obj:updatePositionFromCollider()
     return obj
+end
+
+function Player:updatePositionFromCollider()
+    if not self.collider then return end
+    self.x, self.y = self.collider:getX() + 2, self.collider:getY() - 15
 end
 
 function Player:update(dt)
@@ -55,8 +67,14 @@ function Player:update(dt)
         end
     end
 
-    self.x, self.y = self.collider:getX() + 2, self.collider:getY() - 15
+    self:updatePositionFromCollider()
     self.anim:update(dt)
+end
+
+function Player:setPosition(x, y)
+    if not self.collider then return end
+    self.collider:setPosition(x, y)
+    self:updatePositionFromCollider()
 end
 
 function Player:draw(scale)

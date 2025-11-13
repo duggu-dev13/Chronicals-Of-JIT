@@ -1,6 +1,11 @@
 -- gameState.lua
 -- Main game state (the actual gameplay)
 
+local sti = require 'libraries/sti'
+local Camera = require 'libraries/camera'
+local wf = require 'libraries/windfield'
+local Player = require 'modules/player'
+
 local GameState = {}
 
 function GameState:new(stateManager)
@@ -10,8 +15,34 @@ function GameState:new(stateManager)
     -- Game variables (moved from main.lua)
     obj.cam, obj.world, obj.gameMap, obj.player, obj.walls = nil, nil, nil, nil, {}
     obj.benchRects = {}
+    obj.stageArea = nil
     obj.debugDraw = false
     obj.sounds = {}
+    obj.currentMapPath = nil
+    obj.interactAreas = {}
+    obj.currentInteractArea = nil
+    obj.isLoading = false
+    obj.loadingTimer = 0
+    obj.pendingMapLoad = nil
+    obj.mapConfigs = {
+        ['maps/college_base_map.lua'] = {
+            spawn = { x = 2900, y = 320 },
+            simpleDraw = true,
+            interactions = {
+                {
+                    layer = 'College',
+                    prompt = 'Press E to enter the classroom',
+                    action = 'load_map',
+                    targetMap = 'maps/tileSet.lua',
+                    targetSpawn = { x = 200, y = 100 }
+                }
+            }
+        },
+        ['maps/tileSet.lua'] = {
+            spawn = { x = 200, y = 100 },
+            stageArea = { x = 160, y = 160, w = 200, h = 120 }
+        }
+    }
     
     setmetatable(obj, self)
     self.__index = self
@@ -26,34 +57,48 @@ function GameState:enter()
 end
 
 function GameState:initGame()
-    local sti = require 'libraries/sti'
-    local camera = require 'libraries/camera'
-    local wf = require 'libraries/windfield'
-    local Player = require 'modules/player'
-    
-    -- Map & physics
-    self.gameMap = sti('maps/tileSet.lua')
-    self.world = wf.newWorld(0, 0, true)
+    if not self.cam then
+        self.cam = Camera()
+        self.cam.scale = 4
+    end
 
-    -- Camera
-    self.cam = camera()
-    self.cam.scale = 4
+    if not self.sounds.music then
+        self.sounds.music = love.audio.newSource('sounds/ambience.mp3', 'stream')
+        self.sounds.music:setLooping(true)
+        self.sounds.music:play()
+    elseif not self.sounds.music:isPlaying() then
+        self.sounds.music:play()
+    end
 
-    -- Music
-    self.sounds.music = love.audio.newSource('sounds/ambience.mp3', 'stream')
-    self.sounds.music:play()
-    self.sounds.music:setLooping(true)
-    
-    -- Player
-    self.player = Player:new(self.world)
-
-    -- Walls
-    self:initWalls()
+    local initialMap = 'maps/college_base_map.lua'
+    local spawn = self:getSpawnPoint(initialMap)
+    self:queueMapLoad(initialMap, spawn)
 end
 
 function GameState:update(dt)
+    if self.isLoading then
+        self.loadingTimer = self.loadingTimer - dt
+        if self.loadingTimer <= 0 then
+            local pending = self.pendingMapLoad
+            self.isLoading = false
+            self.pendingMapLoad = nil
+            if pending then
+                self:loadMap(pending.mapPath, pending.spawn)
+            end
+        end
+        return
+    end
+
+    if not self.world or not self.player then return end
+
     self.world:update(dt)
     self.player:update(dt)
+
+    if self.gameMap and self.gameMap.update then
+        self.gameMap:update(dt)
+    end
+
+    self:updateInteractState()
     self:updateCamera()
 end
 
@@ -70,6 +115,12 @@ function GameState:draw()
         end
     self.cam:detach()
     
+    if not self.isLoading then
+        self:drawInteractionPrompt()
+    end
+
+    self:drawLoadingOverlay()
+    
     -- Ensure color is reset after drawing
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -77,6 +128,8 @@ end
 function GameState:keypressed(key)
     if key == 'f1' then
         self.debugDraw = not self.debugDraw
+    elseif key == 'e' then
+        self:handleInteraction()
     elseif key == 'escape' then
         self.stateManager:setState("menu")
     end
@@ -84,95 +137,263 @@ end
 
 -- ===================== WALLS =====================
 function GameState:initWalls()
-    if not self.gameMap.layers["Walls"] then return end
-    for _, obj in pairs(self.gameMap.layers["Walls"].objects) do
-        local wall = self.world:newRectangleCollider(obj.x, obj.y, obj.width, obj.height)
-        wall:setType("static")
-        table.insert(self.walls, wall)
+    self.walls = {}
+    self.benchRects = {}
 
-        -- Heuristic: treat small rectangles as bench tops for depth masking
-        if obj.width <= 40 and obj.height <= 40 then
-            table.insert(self.benchRects, {
-                x = obj.x, y = obj.y, w = obj.width, h = obj.height
-            })
+    if not self.gameMap or not self.world then return end
+
+    local layersToCheck = { "Walls", "Walls and Buildings" }
+
+    for _, layerName in ipairs(layersToCheck) do
+        local layer = self.gameMap.layers[layerName]
+        if layer and layer.objects then
+            local offsetX = layer.offsetx or 0
+            local offsetY = layer.offsety or 0
+
+            for _, obj in ipairs(layer.objects) do
+                local shape = obj.shape
+                local x = (obj.x or 0) + offsetX
+                local y = (obj.y or 0) + offsetY
+                local collider = nil
+
+                if shape == "rectangle" then
+                    collider = self.world:newRectangleCollider(x, y, obj.width, obj.height)
+                    if obj.width and obj.height and obj.width <= 40 and obj.height <= 40 then
+                        table.insert(self.benchRects, {
+                            x = x, y = y, w = obj.width, h = obj.height
+                        })
+                    end
+                elseif shape == "ellipse" then
+                    local radius = math.max(obj.width or 0, obj.height or 0) / 2
+                    local cx = x + (obj.width or 0) / 2
+                    local cy = y + (obj.height or 0) / 2
+                    collider = self.world:newCircleCollider(cx, cy, radius)
+                end
+
+                if collider then
+                    collider:setType("static")
+                    table.insert(self.walls, collider)
+                end
+            end
         end
     end
-    
+
     -- Add stage area for depth sorting
     self:initStageArea()
 end
 
 -- ===================== STAGE AREA & PLANTS =====================
 function GameState:initStageArea()
-    -- Initialize stage area separately from other objects
-    -- Try to find the actual stage area from the map
     self.stageArea = nil
-    
-    -- Look for stage area in the map layers
-    if self.gameMap.layers["Base Stage Floor"] then
-        local stageLayer = self.gameMap.layers["Base Stage Floor"]
-        if stageLayer.objects and #stageLayer.objects > 0 then
-            -- Use the first stage object as the stage area
-            local stageObj = stageLayer.objects[1]
-            self.stageArea = {
-                x = stageObj.x, y = stageObj.y, w = stageObj.width, h = stageObj.height
-            }
-            print("Stage area found: x=" .. stageObj.x .. ", y=" .. stageObj.y .. ", w=" .. stageObj.width .. ", h=" .. stageObj.height)
-        else
-            -- Fallback: use manual coordinates
-            self.stageArea = {
-                x = 160, y = 160, w = 200, h = 120  -- Stage area coordinates - adjust if needed
-            }
-            print("Using manual stage area: x=160, y=160, w=200, h=120")
-        end
-    else
-        -- Fallback: use manual coordinates
+
+    local stageLayer = self.gameMap and self.gameMap.layers and self.gameMap.layers["Base Stage Floor"]
+    if stageLayer and stageLayer.objects and #stageLayer.objects > 0 then
+        local stageObj = stageLayer.objects[1]
+        local offsetX = stageLayer.offsetx or 0
+        local offsetY = stageLayer.offsety or 0
         self.stageArea = {
-            x = 160, y = 160, w = 200, h = 120  -- Stage area coordinates - adjust if needed
+            x = (stageObj.x or 0) + offsetX,
+            y = (stageObj.y or 0) + offsetY,
+            w = stageObj.width,
+            h = stageObj.height
         }
-        print("Using manual stage area: x=160, y=160, w=200, h=120")
     end
-    
-    -- Look for plants in the map layers
-    if self.gameMap.layers["Floor and Wall Objects"] and self.gameMap.layers["Floor and Wall Objects"].objects then
-        print("Found " .. #self.gameMap.layers["Floor and Wall Objects"].objects .. " objects in Floor and Wall Objects layer")
-        for _, obj in pairs(self.gameMap.layers["Floor and Wall Objects"].objects) do
+
+    local floorObjectsLayer = self.gameMap.layers["Floor and Wall Objects"]
+    if floorObjectsLayer and floorObjectsLayer.objects then
+        for _, obj in ipairs(floorObjectsLayer.objects) do
             table.insert(self.benchRects, {
-                x = obj.x, y = obj.y, w = obj.width, h = obj.height
+                x = obj.x + (floorObjectsLayer.offsetx or 0),
+                y = obj.y + (floorObjectsLayer.offsety or 0),
+                w = obj.width,
+                h = obj.height
             })
         end
-    else
-        print("Floor and Wall Objects layer not found or has no objects")
     end
-    
-    -- Also check other potential plant layers
-    if self.gameMap.layers["Wall Objects"] and self.gameMap.layers["Wall Objects"].objects then
-        print("Found " .. #self.gameMap.layers["Wall Objects"].objects .. " objects in Wall Objects layer")
-        for _, obj in pairs(self.gameMap.layers["Wall Objects"].objects) do
+
+    local benchesLayer = self.gameMap.layers["Benches and Vegetation"]
+    if benchesLayer and benchesLayer.objects then
+        for _, obj in ipairs(benchesLayer.objects) do
             table.insert(self.benchRects, {
-                x = obj.x, y = obj.y, w = obj.width, h = obj.height
+                x = obj.x + (benchesLayer.offsetx or 0),
+                y = obj.y + (benchesLayer.offsety or 0),
+                w = obj.width,
+                h = obj.height
             })
         end
-    else
-        print("Wall Objects layer not found or has no objects")
     end
-    
-    -- Check benches layer
-    if self.gameMap.layers["Benches and Vegetation"] then
-        print("Benches and Vegetation layer found")
-    else
-        print("Benches and Vegetation layer not found")
+
+    if not self.stageArea then
+        local config = self.mapConfigs[self.currentMapPath or ""] or {}
+        local stageConfig = config.stageArea
+        if stageConfig then
+            self.stageArea = {
+                x = stageConfig.x,
+                y = stageConfig.y,
+                w = stageConfig.w,
+                h = stageConfig.h
+            }
+        end
     end
-    
-    print("Total objects for depth sorting: " .. #self.benchRects)
+end
+
+function GameState:getSpawnPoint(mapPath)
+    local config = self.mapConfigs[mapPath]
+    if config and config.spawn then
+        return { x = config.spawn.x, y = config.spawn.y }
+    end
+    return { x = 200, y = 100 }
+end
+
+function GameState:getInteractionConfigs(mapPath)
+    local config = self.mapConfigs[mapPath]
+    if config and config.interactions then
+        return config.interactions
+    end
+    return {}
+end
+
+function GameState:collectInteractAreas()
+    self.interactAreas = {}
+    if not self.gameMap then return end
+
+    for _, interaction in ipairs(self:getInteractionConfigs(self.currentMapPath)) do
+        local layer = self.gameMap.layers[interaction.layer]
+        if layer and layer.objects then
+            local offsetX = layer.offsetx or 0
+            local offsetY = layer.offsety or 0
+            for _, obj in ipairs(layer.objects) do
+                table.insert(self.interactAreas, {
+                    name = interaction.layer,
+                    prompt = interaction.prompt or "Press E",
+                    action = interaction.action,
+                    targetMap = interaction.targetMap,
+                    targetSpawn = interaction.targetSpawn,
+                    x = (obj.x or 0) + offsetX,
+                    y = (obj.y or 0) + offsetY,
+                    w = obj.width or 0,
+                    h = obj.height or 0
+                })
+            end
+        end
+    end
+end
+
+function GameState:queueMapLoad(mapPath, spawn)
+    self.pendingMapLoad = {
+        mapPath = mapPath,
+        spawn = spawn and { x = spawn.x, y = spawn.y } or nil
+    }
+    self.isLoading = true
+    self.loadingTimer = 1.5
+
+    if self.player then
+        if self.player.sounds and self.player.sounds.footstep:isPlaying() then
+            self.player.sounds.footstep:stop()
+        end
+        if self.player.collider then
+            self.player.collider:setLinearVelocity(0, 0)
+        end
+    end
+end
+
+function GameState:loadMap(mapPath, spawnOverride)
+    if self.world and self.world.destroy then
+        self.world:destroy()
+    end
+
+    self.currentMapPath = mapPath
+    self.gameMap = sti(mapPath)
+    self.world = wf.newWorld(0, 0, true)
+    self.walls = {}
+    self.benchRects = {}
+    self.interactAreas = {}
+    self.currentInteractArea = nil
+
+    local spawn = spawnOverride or self:getSpawnPoint(mapPath)
+
+    if self.player and self.player.sounds and self.player.sounds.footstep:isPlaying() then
+        self.player.sounds.footstep:stop()
+    end
+
+    self:initWalls()
+    self:collectInteractAreas()
+
+    local validSpawn = {
+        x = (spawn and spawn.x) or 200,
+        y = (spawn and spawn.y) or 100
+    }
+    self.player = Player:new(self.world, validSpawn)
+
+    if self.cam then
+        self.cam:lookAt(self.player.x, self.player.y)
+    end
+
+    self:updateCamera()
+    self.isLoading = false
+    self.loadingTimer = 0
+end
+
+function GameState:updateInteractState()
+    self.currentInteractArea = nil
+    if not self.interactAreas then return end
+
+    if not self.player or not self.player.collider then return end
+
+    local colliderX, colliderY = self.player.collider:getPosition()
+    local px = colliderX
+    local py = (self.player.y or colliderY) + 16
+
+    for _, area in ipairs(self.interactAreas) do
+        if px >= area.x and px <= area.x + area.w and py >= area.y and py <= area.y + area.h then
+            self.currentInteractArea = area
+            break
+        end
+    end
+end
+
+function GameState:drawInteractionPrompt()
+    if not self.currentInteractArea then return end
+
+    local prompt = self.currentInteractArea.prompt or "Press E"
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf(prompt, 0, love.graphics.getHeight() - 60, love.graphics.getWidth(), 'center')
+end
+
+function GameState:handleInteraction()
+    if not self.currentInteractArea then return end
+
+    local area = self.currentInteractArea
+    if area.action == 'load_map' and area.targetMap then
+        local spawn = area.targetSpawn or self:getSpawnPoint(area.targetMap)
+        self:queueMapLoad(area.targetMap, spawn)
+    end
+end
+
+function GameState:drawLoadingOverlay()
+    if not self.isLoading then return end
+
+    local width, height = love.graphics.getWidth(), love.graphics.getHeight()
+    love.graphics.setColor(0, 0, 0, 0.85)
+    love.graphics.rectangle('fill', 0, 0, width, height)
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Loading...", 0, height / 2 - 16, width, 'center')
 end
 
 -- ===================== CAMERA =====================
 function GameState:updateCamera()
+    if not self.cam or not self.player or not self.gameMap then return end
+
     self.cam:lookAt(self.player.x, self.player.y)
 
     local windowWidth, windowHeight = love.graphics.getWidth(), love.graphics.getHeight()
-    local mapWidth, mapHeight = self.gameMap.width * self.gameMap.tilewidth, self.gameMap.height * self.gameMap.tileheight
+    local mapWidth = (self.gameMap.width or 0) * (self.gameMap.tilewidth or 0)
+    local mapHeight = (self.gameMap.height or 0) * (self.gameMap.tileheight or 0)
+
+    if mapWidth == 0 or mapHeight == 0 then
+        return
+    end
 
     -- Clamp camera inside map bounds
     self.cam.x = math.max(windowWidth / (2 * self.cam.scale), math.min(self.cam.x, mapWidth - (windowWidth / (2 * self.cam.scale))))
@@ -198,7 +419,33 @@ function GameState:drawMap()
 end
 
 -- Draw scene with benches depth-sorted against player using world-space stencil
+function GameState:drawSimpleScene()
+    if not self.gameMap then return end
+
+    for _, layer in ipairs(self.gameMap.layers) do
+        if layer.type == "tilelayer" or layer.type == "imagelayer" then
+            love.graphics.setColor(1, 1, 1, 1)
+            self.gameMap:drawLayer(layer)
+        end
+    end
+
+    if self.player then
+        love.graphics.setColor(1, 1, 1, 1)
+        self.player:draw(self.cam and self.cam.scale or 1)
+    end
+end
+
 function GameState:drawSceneWithDepth()
+    if not self.gameMap then
+        return
+    end
+
+    local config = self.mapConfigs[self.currentMapPath or ""]
+    if config and config.simpleDraw then
+        self:drawSimpleScene()
+        return
+    end
+
     -- Ensure we start with white color
     love.graphics.setColor(1, 1, 1, 1)
     
