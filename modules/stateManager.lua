@@ -41,15 +41,15 @@ function StateManager:draw()
     end
 end
 
-function StateManager:keypressed(key)
+function StateManager:keypressed(key, action)
     if self.currentState and self.currentState.keypressed then
-        self.currentState:keypressed(key)
+        self.currentState:keypressed(key, action)
     end
 end
 
-function StateManager:keyreleased(key)
+function StateManager:keyreleased(key, action)
     if self.currentState and self.currentState.keyreleased then
-        self.currentState:keyreleased(key)
+        self.currentState:keyreleased(key, action)
     end
 end
 

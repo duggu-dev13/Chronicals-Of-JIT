@@ -371,8 +371,8 @@
   <object id="60" x="424" y="115" width="14" height="11"/>
   <object id="62" x="8" y="338" width="14" height="11"/>
   <object id="64" x="424" y="339" width="14" height="10"/>
-  <object id="132" x="-91" y="352" width="572" height="20"/>
-  <object id="133" x="-52" y="73" width="52" height="283"/>
+  <object id="132" x="-5" y="352" width="457" height="20"/>
+  <object id="133" x="-14" y="73" width="14" height="283"/>
   <object id="134" x="448" y="79" width="52" height="283"/>
  </objectgroup>
 </map>

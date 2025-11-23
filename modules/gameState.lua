@@ -5,6 +5,9 @@ local sti = require 'libraries/sti'
 local Camera = require 'libraries/camera'
 local wf = require 'libraries/windfield'
 local Player = require 'modules/player'
+local MapConfigs = require 'data/maps'
+local ResourceManager = require 'modules/resourceManager'
+
 
 local GameState = {}
 
@@ -26,28 +29,10 @@ function GameState:new(stateManager)
     obj.pendingMapLoad = nil
     obj.selectedCharacter = 'student'
     obj.playerScaleMultiplier = 1
-    obj.mapConfigs = {
-        ['maps/college_base_map.lua'] = {
-            spawn = { x = 2900, y = 320 },
-            simpleDraw = true,
-            playerScale = 2,
-            cameraScale = 2,  -- Zoomed out for campus view
-            interactions = {
-                {
-                    layer = 'College',
-                    prompt = 'Press E to enter the classroom',
-                    action = 'load_map',
-                    targetMap = 'maps/tileSet.lua',
-                    targetSpawn = { x = 200, y = 100 }
-                }
-            }
-        },
-        ['maps/tileSet.lua'] = {
-            spawn = { x = 200, y = 100 },
-            stageArea = { x = 160, y = 160, w = 200, h = 120 },
-            cameraScale = 4  -- Normal zoom for classroom
-        }
-    }
+    obj.playerScaleMultiplier = 1
+    obj.mapConfigs = MapConfigs
+    
+    setmetatable(obj, self)
     
     setmetatable(obj, self)
     self.__index = self
@@ -68,9 +53,11 @@ function GameState:initGame()
     end
 
     if not self.sounds.music then
-        self.sounds.music = love.audio.newSource('sounds/ambience.mp3', 'stream')
-        self.sounds.music:setLooping(true)
-        self.sounds.music:play()
+        self.sounds.music = ResourceManager.getSound('sounds/ambience.mp3', 'stream')
+        if self.sounds.music then
+            self.sounds.music:setLooping(true)
+            self.sounds.music:play()
+        end
     elseif not self.sounds.music:isPlaying() then
         self.sounds.music:play()
     end
@@ -112,7 +99,7 @@ function GameState:draw()
     love.graphics.setColor(1, 1, 1, 1)
     
     self.cam:attach()
-        self:drawSceneWithDepth()
+        self:drawYSortedScene()
         if self.debugDraw then
             love.graphics.setColor(0, 1, 0, 0.8)
             self.world:draw()
@@ -130,12 +117,12 @@ function GameState:draw()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function GameState:keypressed(key)
-    if key == 'f1' then
+function GameState:keypressed(key, action)
+    if action == 'debug' then
         self.debugDraw = not self.debugDraw
-    elseif key == 'e' then
+    elseif action == 'interact' then
         self:handleInteraction()
-    elseif key == 'escape' then
+    elseif action == 'menu' then
         self.stateManager:setState("menu")
     end
 end
@@ -480,10 +467,8 @@ function GameState:drawSimpleScene()
     end
 end
 
-function GameState:drawSceneWithDepth()
-    if not self.gameMap then
-        return
-    end
+function GameState:drawYSortedScene()
+    if not self.gameMap or not self.player then return end
 
     local config = self.mapConfigs[self.currentMapPath or ""]
     if config and config.simpleDraw then
@@ -491,120 +476,110 @@ function GameState:drawSceneWithDepth()
         return
     end
 
-    if not self.player then
-        return
-    end
-
-    -- Ensure we start with white color
-    love.graphics.setColor(1, 1, 1, 1)
-    
-    -- Draw all layers except benches, stage, and plants (we'll handle these separately for depth sorting)
-    local layersBefore = {
-        'Base Floor',
-        'Base Wall',
-        'Windows'
-    }
-    for _, layer in ipairs(layersBefore) do
-        if self.gameMap.layers[layer] then
-            love.graphics.setColor(1, 1, 1, 1) -- Reset color before each layer
-            self.gameMap:drawLayer(self.gameMap.layers[layer])
+    -- 1. Draw Background Layers (Always behind everything)
+    local backgroundLayers = { 'Base Floor', 'Base Wall', 'Windows', 'Wall Objects', 'Floor and Wall Objects' }
+    for _, layerName in ipairs(backgroundLayers) do
+        if self.gameMap.layers[layerName] then
+            love.graphics.setColor(1, 1, 1, 1)
+            self.gameMap:drawLayer(self.gameMap.layers[layerName])
         end
     end
 
-    local benchesLayer = self.gameMap.layers['Benches and Vegetation']
-    local stageLayer = self.gameMap.layers['Base Stage Floor']
-    local floorObjectsLayer = self.gameMap.layers['Floor and Wall Objects']
-    local wallObjectsLayer = self.gameMap.layers['Wall Objects']
-    
-    local playerBottomY = self.player.getBottomY and self.player:getBottomY() or (self.player.y + 16)
+    -- 2. Collect Drawable Objects
+    local drawables = {}
 
-    -- Margin so stencil fully covers the sprites around the collider top
-    local margin = 32
+    -- Add Player
+    table.insert(drawables, {
+        type = 'player',
+        obj = self.player,
+        y = self.player:getBottomY()
+    })
 
-    -- Check if player is above the stage area
-    local stageBehindPlayer = false
-    if self.stageArea and self.stageArea.y < playerBottomY then
-        stageBehindPlayer = true
-    end
-    
-    -- Draw the stage layer once behind the player (if player is above stage)
-    if stageBehindPlayer and stageLayer then
-        love.graphics.setColor(1, 1, 1, 1)
-        self.gameMap:drawLayer(stageLayer)
-    end
-
-    -- Draw benches and plants whose collider top is above player's bottom (behind player)
-    for _, r in ipairs(self.benchRects) do
-        if r.y < playerBottomY then
-            love.graphics.stencil(function()
-                love.graphics.rectangle('fill', r.x - margin, r.y - margin, r.w + margin * 2, r.h + margin * 2)
-            end, 'replace', 1)
-            love.graphics.setStencilTest('equal', 1)
+    -- Add Map Objects (Benches, Vegetation, etc.)
+    local objectLayers = { 'Benches and Vegetation' }
+    for _, layerName in ipairs(objectLayers) do
+        local layer = self.gameMap.layers[layerName]
+        if layer and layer.objects then
+            local offsetX = layer.offsetx or 0
+            local offsetY = layer.offsety or 0
             
-            -- Draw benches layer if it exists
-            if benchesLayer then
-                love.graphics.setColor(1, 1, 1, 1)
-                self.gameMap:drawLayer(benchesLayer)
+            for _, obj in ipairs(layer.objects) do
+                -- Calculate a "bottom Y" for the object. 
+                local objY = (obj.y or 0) + offsetY
+                
+                -- Tiled objects with GID (images) have Y at bottom-left.
+                -- Shape objects (rectangles) have Y at top-left.
+                if not obj.gid then
+                    objY = objY + (obj.height or 0)
+                end
+
+                table.insert(drawables, {
+                    type = 'mapObject',
+                    obj = obj,
+                    layer = layer, -- Keep reference to layer for drawing tile
+                    y = objY
+                })
             end
-            
-            -- Draw floor objects (plants) if they exist
-            if floorObjectsLayer then
-                love.graphics.setColor(1, 1, 1, 1)
-                self.gameMap:drawLayer(floorObjectsLayer)
-            end
-            
-            love.graphics.setStencilTest()
         end
     end
 
-    -- Draw wall objects that don't need depth sorting (always behind player)
-    if wallObjectsLayer then
-        love.graphics.setColor(1, 1, 1, 1)
-        self.gameMap:drawLayer(wallObjectsLayer)
+    -- Add Stage Layer (Sorted by its TOP Y)
+    if self.stageArea and self.gameMap.layers['Base Stage Floor'] then
+        table.insert(drawables, {
+            type = 'layer',
+            layer = self.gameMap.layers['Base Stage Floor'],
+            y = self.stageArea.y -- Removed offset to ensure objects 'on' the stage draw in front
+        })
     end
 
-    -- Draw player between the two groups
-    love.graphics.setColor(1, 1, 1, 1) -- Reset color before drawing player
-    self.player:draw(self.cam.scale, self.playerScaleMultiplier)
+    -- 3. Sort by Y
+    table.sort(drawables, function(a, b)
+        return a.y < b.y
+    end)
 
-    -- Check if player is below the stage area
-    local stageInFrontPlayer = false
-    if self.stageArea and self.stageArea.y >= playerBottomY then
-        stageInFrontPlayer = true
-    end
-    
-    -- Draw stage layer once in front of the player (if player is below stage)
-    if stageInFrontPlayer and stageLayer then
-        love.graphics.setColor(1, 1, 1, 1)
-        self.gameMap:drawLayer(stageLayer)
-    end
-
-    -- Draw benches and plants whose collider top is at/under player's bottom (in front of player)
-    for _, r in ipairs(self.benchRects) do
-        if r.y >= playerBottomY then
-            love.graphics.stencil(function()
-                love.graphics.rectangle('fill', r.x - margin, r.y - margin, r.w + margin * 2, r.h + margin * 2)
-            end, 'replace', 1)
-            love.graphics.setStencilTest('equal', 1)
-            
-            -- Draw benches layer if it exists
-            if benchesLayer then
-                love.graphics.setColor(1, 1, 1, 1)
-                self.gameMap:drawLayer(benchesLayer)
+    -- 4. Draw Sorted Objects
+    for _, item in ipairs(drawables) do
+        if item.type == 'player' then
+            love.graphics.setColor(1, 1, 1, 1)
+            item.obj:draw(self.cam.scale, self.playerScaleMultiplier)
+        elseif item.type == 'layer' then
+            love.graphics.setColor(1, 1, 1, 1)
+            self.gameMap:drawLayer(item.layer)
+        elseif item.type == 'mapObject' then
+            local obj = item.obj
+            if obj.gid then
+                local tile = self.gameMap.tiles[obj.gid]
+                if tile then
+                    local x = obj.x + (item.layer.offsetx or 0)
+                    local y = obj.y + (item.layer.offsety or 0)
+                    
+                    -- Draw the tile image
+                    local image = tile.image
+                    if not image and tile.tileset then
+                        local tileset = self.gameMap.tilesets[tile.tileset]
+                        if tileset then
+                            image = tileset.image
+                        end
+                    end
+                    if image then
+                        -- Calculate rotation/scale if present
+                        local r = math.rad(obj.rotation or 0)
+                        local sx = obj.width / tile.width
+                        local sy = obj.height / tile.height
+                        love.graphics.draw(image, tile.quad, x, y - obj.height, r, sx, sy)
+                    end 
+                end
+            else
+                -- Shape object (rect/ellipse) - usually invisible colliders, skip or debug draw
+                if self.debugDraw then
+                     love.graphics.setColor(1, 0, 0, 0.5)
+                     if obj.shape == 'rectangle' then
+                         love.graphics.rectangle('fill', obj.x, obj.y, obj.width, obj.height)
+                     end
+                end
             end
-            
-            -- Draw floor objects (plants) if they exist
-            if floorObjectsLayer then
-                love.graphics.setColor(1, 1, 1, 1)
-                self.gameMap:drawLayer(floorObjectsLayer)
-            end
-            
-            love.graphics.setStencilTest()
         end
     end
-    
-    -- Ensure color is reset at the end
-    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function GameState:exit()

@@ -167,17 +167,17 @@ function Menu:draw()
     drawOptions(self, options, selectedIndex, title, startY, spacing, width, height)
 end
 
-function Menu:keypressed(key)
+function Menu:keypressed(key, action)
     local options = self:getActiveOptions()
     if #options == 0 then return end
 
-    if key == 'up' then
+    if action == 'up' then
         self:setActiveSelection(self:getActiveSelection() - 1)
-    elseif key == 'down' then
+    elseif action == 'down' then
         self:setActiveSelection(self:getActiveSelection() + 1)
-    elseif key == 'return' or key == 'space' then
+    elseif action == 'confirm' then
         self:selectOption()
-    elseif key == 'escape' then
+    elseif action == 'menu' then
         if self.mode == 'character' then
             self.mode = 'main'
         else

@@ -1,6 +1,7 @@
 local StateManager = require 'modules/stateManager'
 local Menu = require 'modules/menu'
 local GameState = require 'modules/gameState'
+local InputManager = require 'modules/inputManager'
 
 local stateManager
 
@@ -12,6 +13,7 @@ function love.load()
 
     -- Initialize state manager
     stateManager = StateManager:new()
+    InputManager:init()
     
     -- Add states
     stateManager:addState("menu", Menu:new(stateManager))
@@ -31,7 +33,8 @@ end
 
 -- ===================== INPUT =====================
 function love.keypressed(key)
-    stateManager:keypressed(key)
+    local action = InputManager:isPressed(key)
+    stateManager:keypressed(key, action)
 end
 
 function love.keyreleased(key)

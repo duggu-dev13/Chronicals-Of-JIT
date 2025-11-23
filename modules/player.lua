@@ -1,27 +1,11 @@
 local anim8 = require 'libraries/anim8'
+local CharacterConfigs = require 'data/characters'
+local InputManager = require 'modules/inputManager'
+local ResourceManager = require 'modules/resourceManager'
 
 local Player = {}
 
-Player.characterConfigs = {
-    student = {
-        sheet = 'sprites/Player/Student_1_Walk_Full_Compose-Sheet_SpriteSheet.png',
-        frameWidth = 64,
-        frameHeight = 64,
-        rows = { right = 1, left = 2, down = 3, up = 4 },
-        animSpeed = 0.1,
-        scaleFactor = 2 / 6,
-        footstepSound = 'sounds/female_footsteps.mp3'
-    },
-    teacher = {
-        sheet = 'sprites/Player/professor_1_Walk_Full_Compose-Sheet_SpriteSheet.png',
-        frameWidth = 64,
-        frameHeight = 64,
-        rows = { right = 1, left = 2, down = 3, up = 4 },
-        animSpeed = 0.1,
-        scaleFactor = 1 / 6,
-        footstepSound = 'sounds/female_footsteps.mp3'
-    }
-}
+Player.characterConfigs = CharacterConfigs
 
 local function copySpawn(spawn)
     if not spawn then return nil end
@@ -41,22 +25,25 @@ function Player:new(world, spawn, characterId)
     -- Player setup
     local spawnPos = copySpawn(spawn) or { x = 200, y = 100 }
     obj.x, obj.y = spawnPos.x, spawnPos.y
-    obj.walkingSpeed = (obj.config.walkingSpeed or 60) * 2
+    obj.walkingSpeed = obj.config.walkingSpeed or 60
     obj.animSpeed = obj.config.animSpeed or 0.12
 
     obj.frameWidth = obj.config.frameWidth or 64
     obj.frameHeight = obj.config.frameHeight or 64
+    
+    -- Anchor at bottom-center for better depth sorting and positioning
     obj.originX = obj.frameWidth / 2
-    obj.originY = obj.frameHeight / 2
+    obj.originY = obj.frameHeight 
+    
     obj.scaleFactor = obj.config.scaleFactor or (1 / 6)
-    obj.groundOffset = obj.config.groundOffset or 10
+    obj.groundOffset = obj.config.groundOffset or 0
 
-    obj.spriteSheet = love.graphics.newImage(obj.config.sheet)
+    obj.spriteSheet = ResourceManager.getImage(obj.config.sheet)
     
     -- Sound setup
     obj.sounds = {}
     local footstepPath = obj.config.footstepSound or 'sounds/female_footsteps.mp3'
-    obj.sounds.footstep = love.audio.newSource(footstepPath, 'stream')
+    obj.sounds.footstep = ResourceManager.getSound(footstepPath, 'stream')
 
     -- Collider
     obj.collider = world:newBSGRectangleCollider(obj.x, obj.y, 20, 14, 4)
@@ -83,28 +70,30 @@ end
 function Player:updatePositionFromCollider()
     if not self.collider then return end
     self.x = self.collider:getX()
-    self.y = self.collider:getY() - (self.frameHeight / 2) + self.groundOffset
+    -- Set player Y to the bottom of the collider (feet position)
+    -- Windfield getPosition returns center, so add half height (7 is approx half of 14)
+    self.y = self.collider:getY() + 7 
 end
 
 function Player:update(dt)
     local vx, vy, isMoving = 0, 0, false
 
-    if love.keyboard.isDown('w') or love.keyboard.isDown('up') then
+    if InputManager:isDown('up') then
         vy = -self.walkingSpeed
         self.anim = self.animations.up
         isMoving = true
     end
-    if love.keyboard.isDown('s') or love.keyboard.isDown('down') then
+    if InputManager:isDown('down') then
         vy = self.walkingSpeed
         self.anim = self.animations.down
         isMoving = true
     end
-    if love.keyboard.isDown('d') or love.keyboard.isDown('right') then
+    if InputManager:isDown('right') then
         vx = self.walkingSpeed
         self.anim = self.animations.right
         isMoving = true
     end
-    if love.keyboard.isDown('a') or love.keyboard.isDown('left') then
+    if InputManager:isDown('left') then
         vx = -self.walkingSpeed
         self.anim = self.animations.left
         isMoving = true
@@ -140,7 +129,7 @@ function Player:getDrawScale(cameraScale, extraScale)
 end
 
 function Player:getBottomY()
-    return (self.y or 0) + self.frameHeight - self.groundOffset
+    return self.y -- Since y is now the feet position
 end
 
 function Player:draw(cameraScale, extraScale)
