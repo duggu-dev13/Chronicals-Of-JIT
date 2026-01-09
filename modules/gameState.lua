@@ -17,6 +17,7 @@ local PhoneOS = require 'modules/phone/phoneOS'
 local PhoneOS = require 'modules/phone/phoneOS'
 local CareerManager = require 'modules/careerManager'
 local TravelMenu = require 'modules/ui/travelMenu'
+local StudyGame = require 'modules/minigames/studyGame'
 
 
 local GameState = {}
@@ -59,6 +60,8 @@ function GameState:new(stateManager)
     obj.travelTimer = 0
     obj.busX = -200
     obj.travelTarget = nil -- { map = "", spawn = {} }
+    
+    obj.studyGame = nil
     
     setmetatable(obj, self)
     
@@ -106,6 +109,14 @@ function GameState:initGame()
         self.travelMenu = TravelMenu:new()
     end
 
+    if not self.studyGame then
+        self.studyGame = StudyGame:new({
+            onComplete = function(score)
+                self:endMinigame(score)
+            end
+        })
+    end
+
     if not self.sounds.music then
         self.sounds.music = ResourceManager.getSound('sounds/ambience.mp3', 'stream')
         if self.sounds.music then
@@ -132,7 +143,9 @@ function GameState:update(dt)
                 self:loadMap(pending.mapPath, pending.spawn)
                 -- Apply Travel Time Cost
                 if self.timeSystem and pending.travelCost then
-                    self.timeSystem.accumulatedTime = self.timeSystem.accumulatedTime + pending.travelCost
+                    -- Fix: Add directly to minutes, not accumulated seconds
+                    self.timeSystem:addMinutes(pending.travelCost)
+                    print("Travel Cost Applied: " .. pending.travelCost .. " mins")
                 end
             end
         end
@@ -162,6 +175,11 @@ function GameState:update(dt)
         return -- Skip normal updates
     end
     
+    if self.studyGame and self.studyGame.isActive then
+        self.studyGame:update(dt)
+        return -- Skip world updates
+    end
+    
     if self.timeSystem then
         self.timeSystem:update(dt)
         
@@ -189,6 +207,7 @@ function GameState:draw()
     self.cam:detach()
     
     if not self.isLoading then
+        -- self:drawDebugZones() -- Debug disabled
         self:drawInteractionPrompt()
         
         -- Debug: Live Coordinates (Minecraft Style)
@@ -217,6 +236,15 @@ function GameState:draw()
         if self.isTraveling then
              self:drawBus()
         end
+        
+        if self.studyGame and self.studyGame.isActive then
+            self.studyGame:draw()
+        end
+    end
+    
+    -- FORCE DRAW ON TOP (Debug Fix)
+    if self.studyGame and self.studyGame.isActive then
+        self.studyGame:draw()
     end
 
     self:drawLoadingOverlay()
@@ -226,6 +254,15 @@ function GameState:draw()
 end
 
 function GameState:keypressed(key, action)
+    -- PRIORITY: Check Minigame Input FIRST
+    if self.studyGame and self.studyGame.isActive then
+        self.studyGame:keypressed(key)
+        -- Don't return, allow other system keys (like F8/Debug) if needed, 
+        -- but act as sinking input for gameplay keys. 
+        -- Actually, returning here prevents 'E' from triggering 'interact' again.
+        return 
+    end
+
     if action == 'debug' then
         self.debugDraw = not self.debugDraw
     elseif action == 'phone' then
@@ -238,6 +275,12 @@ function GameState:keypressed(key, action)
         self:handleInteraction()
     elseif action == 'menu' then
         self.stateManager:setState("menu")
+    elseif key == 'f8' then
+        -- DEBUG: Force Start Minigame
+        print("F8 Pressed: Force Starting Study Game")
+        self:startMinigame('study')
+    elseif self.studyGame and self.studyGame.isActive then
+        self.studyGame:keypressed(key)
     end
 end
 
@@ -403,6 +446,7 @@ function GameState:collectInteractAreas()
                 action = interaction.action,
                 targetMap = interaction.targetMap,
                 targetSpawn = interaction.targetSpawn,
+                type = interaction.type, -- Fix: Copy minigame type
                 x = interaction.x,
                 y = interaction.y,
                 w = interaction.w or 32,
@@ -421,6 +465,7 @@ function GameState:collectInteractAreas()
                         action = interaction.action,
                         targetMap = interaction.targetMap,
                         targetSpawn = interaction.targetSpawn,
+                        type = interaction.type, -- Fix: Copy minigame type
                         x = (obj.x or 0) + offsetX,
                         y = (obj.y or 0) + offsetY,
                         w = obj.width or 0,
@@ -524,17 +569,59 @@ function GameState:drawInteractionPrompt()
     if not self.currentInteractArea then return end
 
     local prompt = self.currentInteractArea.prompt or "Press E"
+    local w, h = love.graphics.getDimensions()
+    
+    -- Background (200px height at bottom)
+    love.graphics.setColor(0, 0, 0, 0.7)
+    love.graphics.rectangle("fill", 0, h - 200, w, 200)
+    
+    -- Text (Centered in the box)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf(prompt, 0, love.graphics.getHeight() - 60, love.graphics.getWidth(), 'center')
+    love.graphics.printf(prompt, 0, h - 110, w, 'center') -- Centered roughly in the 200px box
+end
+
+-- DEBUG: Draw all interaction zones
+function GameState:drawDebugZones()
+    love.graphics.setColor(1, 0, 0, 0.3)
+    for _, area in ipairs(self.interactAreas) do
+        love.graphics.rectangle("line", area.x, area.y, area.w, area.h)
+        love.graphics.print(area.name or "Zone", area.x, area.y - 15)
+        
+        -- Highlight current
+        if self.currentInteractArea == area then
+            love.graphics.setColor(0, 1, 0, 0.5)
+            love.graphics.rectangle("fill", area.x, area.y, area.w, area.h)
+            love.graphics.setColor(1, 0, 0, 0.3)
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function GameState:handleInteraction()
     if not self.currentInteractArea then return end
 
     local area = self.currentInteractArea
-    if area.action == 'load_map' and area.targetMap then
-        local spawn = area.targetSpawn or self:getSpawnPoint(area.targetMap)
-        self:queueMapLoad(area.targetMap, spawn)
+    
+    if area.action == 'load_map' then
+        -- 1. Travel Gate (Special Case - ONLY if not in Classroom)
+        local isClassroom = self.currentMapPath == 'maps/tileSet.lua'
+        local triggersMenu = (area.name == 'Gate' or (area.prompt and area.prompt:find("Hostel")) or (area.prompt and area.prompt:find("College")))
+        
+        if triggersMenu and self.travelMenu and not isClassroom then
+             self.travelMenu:open(self.currentMapPath)
+             return
+        end
+        
+        -- 2. Normal Map Transition
+        if area.targetMap then
+            local spawn = area.targetSpawn or self:getSpawnPoint(area.targetMap)
+            self:queueMapLoad(area.targetMap, spawn)
+        end
+
+    elseif area.action == 'minigame' then
+        -- 3. Minigame Trigger
+        print("Trigering minigame: " .. tostring(area.type))
+        self:startMinigame(area.type)
     end
 end
 
@@ -608,6 +695,14 @@ function GameState:drawYSortedScene()
     if not self.gameMap or not self.player then return end
 
     local config = self.mapConfigs[self.currentMapPath or ""]
+    
+    -- TEMP: Hostel Floor Fix
+    if self.currentMapPath == 'maps/hostel.lua' then
+        love.graphics.setColor(0.3, 0.25, 0.2, 1) -- Wood color
+        love.graphics.rectangle("fill", 0, 0, 2000, 2000)
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+
     if config and config.simpleDraw then
         self:drawSimpleScene()
         return
@@ -790,21 +885,39 @@ function GameState:mousepressed(x, y, button)
     end
 end
 
-function GameState:handleInteraction()
-    if not self.currentInteractArea then return end
-
-    local area = self.currentInteractArea
-    if area.action == 'load_map' then
-         -- Check if this is the "Gate" that requires the menu
-         if area.name == 'Gate' or area.prompt:find("Hostel") then
-             if self.travelMenu then
-                 self.travelMenu:open()
-             end
-         else
-             -- Normal Door
-             self:queueMapLoad(area.targetMap, area.targetSpawn)
-         end
+function GameState:startMinigame(type)
+    print("startMinigame called with: " .. tostring(type))
+    if type == 'study' then
+        -- Lazy Init if missing (hot-reload fix)
+        if not self.studyGame then
+            print("Lazy initializing StudyGame...")
+            local StudyGame = require 'modules/minigames/studyGame'
+            self.studyGame = StudyGame:new({
+                onComplete = function(score)
+                    self:endMinigame(score)
+                end
+            })
+        end
+        
+        if self.studyGame then
+            print("Starting Study Game...")
+            self.studyGame:start()
+        end
     end
+end
+
+function GameState:endMinigame(score)
+    -- Handle Rewards
+    local rewardMoney = score * 5
+    -- local rewardXp = score * 2
+    
+    if self.careerManager then
+        self.careerManager:modifyMoney(rewardMoney)
+        self.careerManager:modifyEnergy(-10)
+    end
+    
+    print("Minigame Ended! Score: " .. score .. " Earned: $" .. rewardMoney)
+    -- Optional: transition state or show toast
 end
 
 return GameState

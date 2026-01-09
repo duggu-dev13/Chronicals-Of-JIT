@@ -4,7 +4,7 @@ function TravelMenu:new()
     local obj = {}
     obj.isOpen = false
     obj.locations = {
-        { name = "Hostel", map = "maps/hostel.lua", cost = 10 },
+        { name = "Hostel", map = "maps/hostel.lua", cost = 20 },
         { name = "College", map = "maps/college_base_map.lua", cost = 20 }
     }
     
@@ -13,8 +13,14 @@ function TravelMenu:new()
     return obj
 end
 
-function TravelMenu:open()
+function TravelMenu:open(currentMap)
     self.isOpen = true
+    self.filteredLocations = {}
+    for _, loc in ipairs(self.locations) do
+        if loc.map ~= currentMap then
+            table.insert(self.filteredLocations, loc)
+        end
+    end
 end
 
 function TravelMenu:close()
@@ -30,7 +36,7 @@ function TravelMenu:mousepressed(x, y)
     
     -- Check list clicks
     local startY = py + 60
-    for i, loc in ipairs(self.locations) do
+    for i, loc in ipairs(self.filteredLocations or self.locations) do
         local btnY = startY + (i-1)*50
         if x >= px + 20 and x <= px + menuW - 20 and y >= btnY and y <= btnY + 40 then
             return loc
@@ -63,7 +69,7 @@ function TravelMenu:draw()
     
     -- List
     local startY = py + 60
-    for i, loc in ipairs(self.locations) do
+    for i, loc in ipairs(self.filteredLocations or self.locations) do
         local btnY = startY + (i-1)*50
         
         -- Button

@@ -33,6 +33,18 @@ function TimeSystem:update(dt)
     end
 end
 
+function TimeSystem:addMinutes(minutes)
+    local oldTime = self:getTimeString()
+    self.totalMinutes = self.totalMinutes + minutes
+    
+    -- Handle day rollover immediately if needed
+    while self.totalMinutes >= 1440 do
+        self.totalMinutes = self.totalMinutes - 1440
+        self.day = self.day + 1
+    end
+    print(string.format("Time Updated: %s -> %s (Added %d mins)", oldTime, self:getTimeString(), minutes))
+end
+
 function TimeSystem:getTimeString()
     local hours = math.floor(self.totalMinutes / 60)
     local minutes = math.floor(self.totalMinutes % 60)

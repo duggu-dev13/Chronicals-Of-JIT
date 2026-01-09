@@ -37,6 +37,10 @@ function CareerManager:modifyEnergy(amount)
     self.energy = math.max(0, math.min(self.maxEnergy, self.energy + amount))
 end
 
+function CareerManager:modifyMoney(amount)
+    self.money = self.money + amount
+end
+
 function CareerManager:setPath(pathName)
     self.path = pathName
     if pathName == 'student' then

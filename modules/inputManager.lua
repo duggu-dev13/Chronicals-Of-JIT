@@ -9,6 +9,7 @@ InputManager.bindings = {
     interact = { 'e' },
     menu = { 'escape' },
     phone = { 'tab' },
+    sprint = { 'lshift', 'rshift' },
     -- test_travel_hostel = { 'f5' },
     -- test_travel_college = { 'f6' },
     confirm = { 'return', 'space' },

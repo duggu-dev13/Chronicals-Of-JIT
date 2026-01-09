@@ -25,7 +25,7 @@ function Player:new(world, spawn, characterId)
     -- Player setup
     local spawnPos = copySpawn(spawn) or { x = 200, y = 100 }
     obj.x, obj.y = spawnPos.x, spawnPos.y
-    obj.walkingSpeed = (obj.config.walkingSpeed or 60) * 10 -- TEMP 10x BOOST
+    obj.walkingSpeed = obj.config.walkingSpeed or 60
     obj.animSpeed = obj.config.animSpeed or 0.12
 
     obj.frameWidth = obj.config.frameWidth or 64
@@ -78,25 +78,42 @@ end
 function Player:update(dt)
     local vx, vy, isMoving = 0, 0, false
 
+    local speed = self.walkingSpeed
+    local speedMult = 1
+    if InputManager:isDown('sprint') then
+        speedMult = 3
+    end
+    speed = speed * speedMult
+
     if InputManager:isDown('up') then
-        vy = -self.walkingSpeed
+        vy = -speed
         self.anim = self.animations.up
         isMoving = true
     end
     if InputManager:isDown('down') then
-        vy = self.walkingSpeed
+        vy = speed
         self.anim = self.animations.down
         isMoving = true
     end
     if InputManager:isDown('right') then
-        vx = self.walkingSpeed
+        vx = speed
         self.anim = self.animations.right
         isMoving = true
     end
     if InputManager:isDown('left') then
-        vx = -self.walkingSpeed
+        vx = -speed
         self.anim = self.animations.left
         isMoving = true
+    end
+    
+    if isMoving then
+        -- Speed up animation if sprinting
+        if speedMult > 1 then 
+            self.anim:resume() -- Ensure it's playing
+            -- We can't easily change anim speed on the fly with anim8 without hacking it or recreating, 
+            -- but commonly we just let it run. or update with dt * speedMult?
+            -- Anim8 update takes dt. We can pass scaled dt.
+        end
     end
 
     if self.collider then
@@ -115,7 +132,14 @@ function Player:update(dt)
     end
 
     self:updatePositionFromCollider()
-    self.anim:update(dt)
+    self:updatePositionFromCollider()
+    
+    -- Update animation faster if sprinting
+    local updateDt = dt
+    if InputManager:isDown('sprint') and isMoving then
+        updateDt = dt * 2 -- Make feet move faster
+    end
+    self.anim:update(updateDt)
 end
 
 function Player:setPosition(x, y)

@@ -3,10 +3,10 @@ local LocationManager = {}
 -- Travel Matrix (Minutes)
 local DISTANCES = {
     ['maps/hostel.lua'] = {
-        ['maps/college_base_map.lua'] = 40
+        ['maps/college_base_map.lua'] = 20
     },
     ['maps/college_base_map.lua'] = {
-        ['maps/hostel.lua'] = 40
+        ['maps/hostel.lua'] = 20
     }
 }
 
