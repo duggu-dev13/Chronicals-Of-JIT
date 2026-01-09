@@ -6,11 +6,21 @@ local Camera = require 'libraries/camera'
 local wf = require 'libraries/windfield'
 local Player = require 'modules/player'
 local MapConfigs = require 'data/maps'
+local MapConfigs = require 'data/maps'
 local ResourceManager = require 'modules/resourceManager'
+local TimeSystem = require 'modules/timeSystem'
+local HUD = require 'modules/hud'
+local LocationManager = require 'modules/locationManager'
+local HUD = require 'modules/hud'
+local LocationManager = require 'modules/locationManager'
+local PhoneOS = require 'modules/phone/phoneOS'
+local PhoneOS = require 'modules/phone/phoneOS'
+local CareerManager = require 'modules/careerManager'
+local TravelMenu = require 'modules/ui/travelMenu'
 
 
 local GameState = {}
-
+    
 function GameState:new(stateManager)
     local obj = {}
     obj.stateManager = stateManager
@@ -30,7 +40,25 @@ function GameState:new(stateManager)
     obj.selectedCharacter = 'student'
     obj.playerScaleMultiplier = 1
     obj.playerScaleMultiplier = 1
+    obj.playerScaleMultiplier = 1
     obj.mapConfigs = MapConfigs
+    
+    obj.timeSystem = nil
+    obj.hud = nil
+    obj.locationManager = nil
+    obj.phone = nil
+    
+    obj.hud = nil
+    obj.locationManager = nil
+    obj.phone = nil
+    obj.careerManager = nil
+    obj.travelMenu = nil
+    
+    -- Travel Animation State
+    obj.isTraveling = false
+    obj.travelTimer = 0
+    obj.busX = -200
+    obj.travelTarget = nil -- { map = "", spawn = {} }
     
     setmetatable(obj, self)
     
@@ -50,6 +78,32 @@ function GameState:initGame()
     if not self.cam then
         self.cam = Camera()
         self.cam.scale = 2  -- Default zoom (will be overridden by map config)
+    end
+    
+    if not self.timeSystem then
+        self.timeSystem = TimeSystem:new()
+    end
+    
+    if not self.hud then
+        self.hud = HUD:new()
+    end
+    
+    if not self.locationManager then
+        self.locationManager = LocationManager:new()
+    end
+    
+    if not self.phone then
+        self.phone = PhoneOS:new()
+    end
+    
+    if not self.careerManager then
+        self.careerManager = CareerManager:new()
+        -- Default path based on selection
+        self.careerManager:setPath(self.selectedCharacter)
+    end
+    
+    if not self.travelMenu then
+        self.travelMenu = TravelMenu:new()
     end
 
     if not self.sounds.music then
@@ -76,12 +130,22 @@ function GameState:update(dt)
             self.pendingMapLoad = nil
             if pending then
                 self:loadMap(pending.mapPath, pending.spawn)
+                -- Apply Travel Time Cost
+                if self.timeSystem and pending.travelCost then
+                    self.timeSystem.accumulatedTime = self.timeSystem.accumulatedTime + pending.travelCost
+                end
             end
         end
         return
     end
 
     if not self.world or not self.player then return end
+    
+    -- Pause game world if phone is open (optional design choice)
+    if self.phone and self.phone.isOpen then
+        -- Don't update world/player/time
+        return
+    end
 
     self.world:update(dt)
     self.player:update(dt)
@@ -92,6 +156,23 @@ function GameState:update(dt)
 
     self:updateInteractState()
     self:updateCamera()
+    
+    if self.isTraveling then
+        self:updateTravelSequence(dt)
+        return -- Skip normal updates
+    end
+    
+    if self.timeSystem then
+        self.timeSystem:update(dt)
+        
+        -- Simple Energy drain test (1 energy per game hour)
+        -- This logic should move to LifeDirector later
+        if self.timeSystem.accumulatedTime == 0 then -- Just ticked a minute
+             if self.careerManager then
+                 self.careerManager:modifyEnergy(-0.02) -- Slow drain
+             end
+        end
+    end
 end
 
 function GameState:draw()
@@ -109,6 +190,33 @@ function GameState:draw()
     
     if not self.isLoading then
         self:drawInteractionPrompt()
+        
+        -- Debug: Live Coordinates (Minecraft Style)
+        if self.player then
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.print(string.format("X: %.1f Y: %.1f", self.player.x or 0, self.player.y or 0), 10, 100)
+        end
+        
+        if self.hud and self.timeSystem and self.careerManager then
+            self.hud:draw(
+                self.timeSystem:getTimeString(), 
+                self.timeSystem:getDay(), 
+                self.careerManager.money, 
+                self.careerManager.energy
+            )
+        end
+        
+        if self.phone then
+            self.phone:draw()
+        end
+        
+        if self.travelMenu then
+            self.travelMenu:draw()
+        end
+        
+        if self.isTraveling then
+             self:drawBus()
+        end
     end
 
     self:drawLoadingOverlay()
@@ -120,7 +228,13 @@ end
 function GameState:keypressed(key, action)
     if action == 'debug' then
         self.debugDraw = not self.debugDraw
+    elseif action == 'phone' then
+        if self.phone then
+            self.phone:toggle()
+        end
     elseif action == 'interact' then
+        if self.phone and self.phone.isOpen then return end
+        if self.travelMenu and self.travelMenu.isOpen then return end
         self:handleInteraction()
     elseif action == 'menu' then
         self.stateManager:setState("menu")
@@ -281,31 +395,54 @@ function GameState:collectInteractAreas()
     if not self.gameMap then return end
 
     for _, interaction in ipairs(self:getInteractionConfigs(self.currentMapPath)) do
-        local layer = self.gameMap.layers[interaction.layer]
-        if layer and layer.objects then
-            local offsetX = layer.offsetx or 0
-            local offsetY = layer.offsety or 0
-            for _, obj in ipairs(layer.objects) do
-                table.insert(self.interactAreas, {
-                    name = interaction.layer,
-                    prompt = interaction.prompt or "Press E",
-                    action = interaction.action,
-                    targetMap = interaction.targetMap,
-                    targetSpawn = interaction.targetSpawn,
-                    x = (obj.x or 0) + offsetX,
-                    y = (obj.y or 0) + offsetY,
-                    w = obj.width or 0,
-                    h = obj.height or 0
-                })
+        -- 1. Manual/Hardcoded Zone
+        if interaction.x and interaction.y then
+             table.insert(self.interactAreas, {
+                name = interaction.layer or "Manual",
+                prompt = interaction.prompt or "Press E",
+                action = interaction.action,
+                targetMap = interaction.targetMap,
+                targetSpawn = interaction.targetSpawn,
+                x = interaction.x,
+                y = interaction.y,
+                w = interaction.w or 32,
+                h = interaction.h or 32
+            })
+        -- 2. Tiled Object Layer Zone
+        elseif interaction.layer and self.gameMap.layers[interaction.layer] then
+            local layer = self.gameMap.layers[interaction.layer]
+            if layer and layer.objects then
+                local offsetX = layer.offsetx or 0
+                local offsetY = layer.offsety or 0
+                for _, obj in ipairs(layer.objects) do
+                    table.insert(self.interactAreas, {
+                        name = interaction.layer,
+                        prompt = interaction.prompt or "Press E",
+                        action = interaction.action,
+                        targetMap = interaction.targetMap,
+                        targetSpawn = interaction.targetSpawn,
+                        x = (obj.x or 0) + offsetX,
+                        y = (obj.y or 0) + offsetY,
+                        w = obj.width or 0,
+                        h = obj.height or 0
+                    })
+                end
             end
         end
     end
 end
 
 function GameState:queueMapLoad(mapPath, spawn)
+    -- Calculate Travel Cost
+    local travelCost = 0
+    if self.locationManager and self.currentMapPath then
+        travelCost = self.locationManager:getTravelTime(self.currentMapPath, mapPath)
+    end
+
     self.pendingMapLoad = {
         mapPath = mapPath,
-        spawn = spawn and { x = spawn.x, y = spawn.y } or nil
+        spawn = spawn and { x = spawn.x, y = spawn.y } or nil,
+        travelCost = travelCost -- Store cost to apply later
     }
     self.isLoading = true
     self.loadingTimer = 1.5
@@ -586,6 +723,87 @@ function GameState:exit()
     -- Clean up game resources if needed
     if self.sounds.music then
         self.sounds.music:stop()
+    end
+end
+
+
+
+function GameState:updateTravelSequence(dt)
+    local width = love.graphics.getWidth()
+    self.travelTimer = self.travelTimer + dt
+    
+    -- Phase 1: Bus Arrives (0 to 2s)
+    if self.travelTimer < 2 then
+        self.busX = -200 + (self.travelTimer / 2) * (width/2 + 200) -- Move to Center
+        
+    -- Phase 2: Boarding (2 to 3s)
+    elseif self.travelTimer < 3 then
+        self.busX = width/2
+        -- Hide Player here if desired
+        
+    -- Phase 3: Bus Departs (3 to 5s)
+    elseif self.travelTimer < 5 then
+        local t = self.travelTimer - 3
+        self.busX = width/2 + (t / 2) * (width/2 + 300) -- Move out Right
+        
+    -- Phase 4: Load Map
+    else
+        self.isTraveling = false
+        if self.travelTarget then
+            self:queueMapLoad(self.travelTarget.map, self.travelTarget.spawn)
+            self.travelTarget = nil
+        end
+    end
+end
+
+function GameState:drawBus()
+    local width, height = love.graphics.getWidth(), love.graphics.getHeight()
+    love.graphics.setColor(1, 1, 0, 1) -- Yellow Bus
+    love.graphics.rectangle("fill", self.busX - 100, height - 150, 200, 100)
+    
+    -- Wheels
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.circle("fill", self.busX - 60, height - 50, 20)
+    love.graphics.circle("fill", self.busX + 60, height - 50, 20)
+    
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.print("BUS", self.busX - 20, height - 100)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function GameState:mousepressed(x, y, button)
+    if self.phone and self.phone:mousepressed(x, y, button) then
+        return
+    end
+    
+    if self.travelMenu and self.travelMenu.isOpen then
+        local target = self.travelMenu:mousepressed(x, y)
+        if target then
+            self.travelMenu:close()
+            -- Start Travel Sequence
+            self.isTraveling = true
+            self.travelTimer = 0
+            self.busX = -200
+            self.travelTarget = { map = target.map, spawn = nil }
+        end
+        return
+    end
+end
+
+function GameState:handleInteraction()
+    if not self.currentInteractArea then return end
+
+    local area = self.currentInteractArea
+    if area.action == 'load_map' then
+         -- Check if this is the "Gate" that requires the menu
+         if area.name == 'Gate' or area.prompt:find("Hostel") then
+             if self.travelMenu then
+                 self.travelMenu:open()
+             end
+         else
+             -- Normal Door
+             self:queueMapLoad(area.targetMap, area.targetSpawn)
+         end
     end
 end
 

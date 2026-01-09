@@ -25,7 +25,7 @@ function Player:new(world, spawn, characterId)
     -- Player setup
     local spawnPos = copySpawn(spawn) or { x = 200, y = 100 }
     obj.x, obj.y = spawnPos.x, spawnPos.y
-    obj.walkingSpeed = obj.config.walkingSpeed or 60
+    obj.walkingSpeed = (obj.config.walkingSpeed or 60) * 10 -- TEMP 10x BOOST
     obj.animSpeed = obj.config.animSpeed or 0.12
 
     obj.frameWidth = obj.config.frameWidth or 64

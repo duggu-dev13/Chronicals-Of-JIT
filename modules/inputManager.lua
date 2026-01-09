@@ -8,6 +8,9 @@ InputManager.bindings = {
     right = { 'd', 'right' },
     interact = { 'e' },
     menu = { 'escape' },
+    phone = { 'tab' },
+    -- test_travel_hostel = { 'f5' },
+    -- test_travel_college = { 'f6' },
     confirm = { 'return', 'space' },
     debug = { 'f1' }
 }
