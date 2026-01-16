@@ -178,6 +178,7 @@ function GameState:update(dt)
     
     -- Pause game world if phone is open (optional design choice)
     if self.phone and self.phone.isOpen then
+        self.phone:update(dt) -- Update animations
         -- Don't update world/player/time
         return
     end
@@ -207,15 +208,14 @@ function GameState:update(dt)
     end
     
     if self.timeSystem then
-        self.timeSystem:update(dt)
+        -- self.timeSystem:update(dt) -- Disabled for Action-Based Time
         
-        -- Simple Energy drain test (1 energy per game hour)
-        -- This logic should move to LifeDirector later
-        if self.timeSystem.accumulatedTime == 0 then -- Just ticked a minute
-             if self.careerManager then
-                 self.careerManager:modifyEnergy(-0.02) -- Slow drain
-             end
-        end
+        -- Passive Energy Drain Disabled
+        -- if self.timeSystem.accumulatedTime == 0 then
+             -- if self.careerManager then
+                 -- self.careerManager:modifyEnergy(-0.02)
+             -- end
+        -- end
     end
 end
 
@@ -252,7 +252,8 @@ function GameState:draw()
         end
         
         if self.phone then
-            self.phone:draw(self.careerManager, self.messageManager, self.questManager)
+            -- Updated to pass TimeSystem as 4th argument
+            self.phone:draw(self.careerManager, self.messageManager, self.questManager, self.timeSystem)
         end
         
         if self.travelMenu then
@@ -497,10 +498,10 @@ function GameState:collectInteractAreas()
                 type = interaction.type, -- Fix: Copy minigame type
                 x = interaction.x,
                 y = interaction.y,
-                w = interaction.w or 32,
+                w = interaction.w or 32, -- Fix: Add default width
                 h = interaction.h or 32
             })
-        -- 2. Tiled Object Layer Zone
+        -- 2. Tiled Object Layer Zone (From Config)
         elseif interaction.layer and self.gameMap.layers[interaction.layer] then
             local layer = self.gameMap.layers[interaction.layer]
             if layer and layer.objects then
@@ -513,12 +514,33 @@ function GameState:collectInteractAreas()
                         action = interaction.action,
                         targetMap = interaction.targetMap,
                         targetSpawn = interaction.targetSpawn,
-                        type = interaction.type, -- Fix: Copy minigame type
+                        type = interaction.type, 
                         x = (obj.x or 0) + offsetX,
                         y = (obj.y or 0) + offsetY,
                         w = obj.width or 0,
                         h = obj.height or 0
                     })
+                end
+            end
+        end
+    end
+    
+    -- 3. Auto-Scan for Benches (Dynamic Interaction)
+    if self.gameMap.layers["Benches and Vegetation"] then
+        local layer = self.gameMap.layers["Benches and Vegetation"]
+        if layer and layer.objects then
+            for _, obj in ipairs(layer.objects) do
+                -- Check for 'benchId' property or similar if needed, or just all objects on this layer
+                if obj.properties and obj.properties["benchId"] then
+                     table.insert(self.interactAreas, {
+                         name = "Bench",
+                         prompt = "Press E to Attend Class",
+                         action = "class",
+                         x = (obj.x or 0),
+                         y = (obj.y or 0),
+                         w = obj.width or 32,
+                         h = obj.height or 32
+                     })
                 end
             end
         end
@@ -725,6 +747,22 @@ function GameState:handleInteraction()
         -- 6. Open Shop Menu
         if self.shopMenu then
             self.shopMenu:open()
+        end
+        
+    elseif area.action == 'class' then
+        -- 7. Attend Class
+        if self.careerManager and self.timeSystem then
+            local success, reason = self.careerManager:attendClass(self.timeSystem)
+            
+            if success then
+                 if self.hud then
+                    self.hud:addNotification(reason)
+                 end
+            else
+                 if self.hud then
+                    self.hud:addNotification(reason or "Cannot attend class.")
+                 end
+            end
         end
     end
 end

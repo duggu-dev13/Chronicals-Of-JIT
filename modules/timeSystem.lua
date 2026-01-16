@@ -20,17 +20,17 @@ function TimeSystem:update(dt)
     
     self.accumulatedTime = self.accumulatedTime + dt
     
-    while self.accumulatedTime >= self.secondsPerGameMinute do
-        self.accumulatedTime = self.accumulatedTime - self.secondsPerGameMinute
-        self.totalMinutes = self.totalMinutes + 1
+    -- while self.accumulatedTime >= self.secondsPerGameMinute do
+    --    self.accumulatedTime = self.accumulatedTime - self.secondsPerGameMinute
+    --    self.totalMinutes = self.totalMinutes + 1
         
         -- New Day Logic (1440 mins = 24 hours)
-        if self.totalMinutes >= 1440 then
-            self.totalMinutes = self.totalMinutes - 1440
-            self.day = self.day + 1
+    --    if self.totalMinutes >= 1440 then
+    --        self.totalMinutes = self.totalMinutes - 1440
+    --        self.day = self.day + 1
             -- TODO: Trigger 'New Day' Event
-        end
-    end
+    --    end
+    -- end
 end
 
 function TimeSystem:addMinutes(minutes)

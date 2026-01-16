@@ -14,6 +14,7 @@ function HUD:new()
     -- Money Popups: { text = "+50", amount = 50, x = 0, y = 0, timer = 2.0, alpha = 1.0 }
     obj.moneyPopups = {}
     obj.displayMoney = 0
+    obj.visualEnergy = 100 -- For smooth energy bar animation
     
     setmetatable(obj, self)
     self.__index = self
@@ -59,22 +60,19 @@ function HUD:update(dt)
             table.remove(self.moneyPopups, i)
         end
     end
+    
+    -- Animate Energy (Lerp)
+    -- We can't access actual energy here easily without passing it to update, 
+    -- but we pass it to draw. 
+    -- Workaround: We'll do the lerp step inside draw() for now since HUD doesn't hold reference to CareerManager.
+    -- Or better, let's just do it in draw. keeping update clean.
 end
 
 function HUD:draw(timeString, day, money, energy)
     local width = love.graphics.getWidth()
     local height = love.graphics.getHeight()
     
-    -- 1. Top Right: Clock Panel
-    love.graphics.setColor(0.1, 0.1, 0.1, 0.8)
-    love.graphics.rectangle("fill", width - 160, 10, 150, 80, 10, 10)
-    
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.setFont(self.fontLarge)
-    love.graphics.print(timeString, width - 130, 20)
-    
-    love.graphics.setFont(self.fontSmall)
-    love.graphics.print("Day " .. day, width - 130, 50)
+    -- 1. Clock Removed (Moved to Phone)
     
     -- 2. Top Left: Money & Stats
     love.graphics.setColor(0.1, 0.1, 0.1, 0.8)
@@ -90,6 +88,7 @@ function HUD:draw(timeString, day, money, energy)
         self.displayMoney = targetMoney
     end
     
+    love.graphics.setFont(self.fontLarge) -- Explicitly set font
     love.graphics.print("Rs." .. math.floor(self.displayMoney), 20, 25)
     
     -- Draw Money Popups
@@ -109,11 +108,20 @@ function HUD:draw(timeString, day, money, energy)
         love.graphics.setColor(0, 0, 0, 0.8)
         love.graphics.rectangle("fill", 10, height - 40, 200, 20) -- Back
         
+        -- Lerp Visual Energy
+        local diff = energy - self.visualEnergy
+        if math.abs(diff) > 0.1 then
+            self.visualEnergy = self.visualEnergy + diff * 5 * love.timer.getDelta()
+        else
+            self.visualEnergy = energy
+        end
+        
         love.graphics.setColor(0, 1, 0, 1) -- Green
-        local barWidth = (energy / 100) * 200
+        local barWidth = (self.visualEnergy / 100) * 200
         love.graphics.rectangle("fill", 10, height - 40, barWidth, 20) -- Front
         
         love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setFont(self.fontSmall) -- Explicitly set font
         love.graphics.print("Energy", 20, height - 60)
     end
     

@@ -16,6 +16,14 @@ function ShopMenu:new(game)
     }
     setmetatable(obj, self)
     self.__index = self
+    
+    -- Preload Fonts
+    obj.fonts = {
+        header = love.graphics.newFont(24),
+        item = love.graphics.newFont(16),
+        total = love.graphics.newFont(20)
+    }
+    
     return obj
 end
 
@@ -96,11 +104,11 @@ function ShopMenu:draw()
     
     -- Header
     love.graphics.setColor(0.2, 0.2, 0.2, 1)
-    love.graphics.setFont(love.graphics.newFont(24))
+    love.graphics.setFont(self.fonts.header)
     love.graphics.printf("Canteen Counter", px, py + 20, panelW, "center")
     
     -- Item List (Left Side)
-    love.graphics.setFont(love.graphics.newFont(16))
+    love.graphics.setFont(self.fonts.item)
     local startY = py + 80
     for i, item in ipairs(self.items) do
          local y = startY + (i-1)*50
@@ -151,7 +159,7 @@ function ShopMenu:draw()
     
     -- Total & Checkout
     love.graphics.setColor(0, 0, 0, 1)
-    love.graphics.setFont(love.graphics.newFont(20))
+    love.graphics.setFont(self.fonts.total)
     love.graphics.print("Total: Rs." .. self.totalCost, px + 320, py + 300)
     
     -- Buy Button
@@ -163,7 +171,7 @@ function ShopMenu:draw()
     -- Close Button
     love.graphics.setColor(0.8, 0.2, 0.2, 1)
     love.graphics.rectangle("fill", px + panelW - 40, py + 10, 30, 30, 5, 5)
-    love.graphics.setFont(love.graphics.newFont(16))
+    love.graphics.setFont(self.fonts.item)
     love.graphics.printf("X", px + panelW - 40, py + 15, 30, "center")
     
     -- Confirmation Popup

@@ -47,11 +47,11 @@ function StatusMenu:draw()
     love.graphics.setFont(love.graphics.newFont(16))
     love.graphics.print("Rank: " .. career:getRank(), leftX, topY + 30)
     
-    -- Avatar Placeholder
-    love.graphics.setColor(0.2, 0.2, 0.2, 1)
-    love.graphics.rectangle("fill", leftX, topY + 70, 150, 150)
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("No Image", leftX + 40, topY + 130)
+    love.graphics.setColor(0.6, 0.6, 0.6, 1)
+    love.graphics.setFont(love.graphics.newFont(16))
+    love.graphics.print("Rank: " .. career:getRank(), leftX, topY + 30)
+    
+    -- Removed Avatar Placeholder as requested
     
     -- 5. Middle Column: Main Stats
     local midX = 400
@@ -63,7 +63,9 @@ function StatusMenu:draw()
     
     self:drawStatRow("Energy", math.floor(career.energy) .. " / " .. career.maxEnergy, midX, topY + 110)
     self:drawStatRow("Stress", math.floor(career.stress) .. " / " .. career.maxStress, midX, topY + 150)
-    self:drawStatRow("Money", "Rs. " .. career.money, midX, topY + 190)
+    self:drawStatRow("Energy", math.floor(career.energy) .. " / " .. career.maxEnergy, midX, topY + 110)
+    self:drawStatRow("Stress", math.floor(career.stress) .. " / " .. career.maxStress, midX, topY + 150)
+    -- Money is handled in Phone/HUD
     
     -- 6. Right Column: Attributes
     local rightX = 700

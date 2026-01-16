@@ -10,6 +10,13 @@ function TravelMenu:new()
     
     setmetatable(obj, self)
     self.__index = self
+    
+    -- Preload Fonts
+    obj.fonts = {
+        title = love.graphics.newFont(20),
+        item = love.graphics.newFont(16) -- Default size
+    }
+    
     return obj
 end
 
@@ -64,11 +71,13 @@ function TravelMenu:draw()
     
     -- Header
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.setFont(love.graphics.newFont(20))
+    love.graphics.setFont(self.fonts.title)
     love.graphics.printf("Select Destination", px, py + 20, menuW, "center")
     
     -- List
     local startY = py + 60
+    love.graphics.setFont(self.fonts.item)
+    
     for i, loc in ipairs(self.filteredLocations or self.locations) do
         local btnY = startY + (i-1)*50
         

@@ -21,6 +21,7 @@ function CareerManager:new()
     }
     obj.onMoneyChanged = nil -- Callback function
     obj.lastSleepTime = -9999 -- Initialize to allow immediate sleep
+    obj.lastClassTime = -9999 -- Initialize to allow immediate class
     
     -- RPG Stats
     obj.knowledge = 0
@@ -107,7 +108,43 @@ function CareerManager:eat()
     return false, "Not enough money."
 end
 
-    return false, "Not enough money."
+
+
+
+function CareerManager:attendClass(timeSystem)
+    -- Requires Time System to check hours
+    if not timeSystem then return false, "Time System Error" end
+    
+    
+    -- Calculate hour from totalMinutes (since .hour property doesn't exist)
+    local currentTime = timeSystem.totalMinutes
+    local hour = math.floor(currentTime / 60)
+    
+    -- Cooldown Check: Class takes 60 mins. Let's force a 30 mins break after it ends.
+    -- So subsequent start must be >= start + 60 + 30 = 90 mins later
+    if (currentTime - self.lastClassTime) < 90 then
+        local minsWait = 90 - (currentTime - self.lastClassTime)
+        return false, "Class ended recently. Wait " .. minsWait .. "m."
+    end
+    
+    -- Classes: 09:00 to 14:00
+    -- Classes: 09:00 to 14:00
+    if hour < 9 or hour >= 14 then
+        return false, "Classes are closed. Open 09:00 - 14:00."
+    end
+    
+    local energyCost = 20
+    if self.energy < energyCost then
+        return false, "Too tired to study."
+    end
+    
+    self:modifyEnergy(-energyCost)
+    self:gainKnowledge(10)
+    
+    self.lastClassTime = currentTime -- Mark the START time
+    timeSystem:addMinutes(60) -- Takes 1 hour
+    
+    return true, "Attended Lecture. Knowledge +10"
 end
 
 function CareerManager:gainKnowledge(amount)
