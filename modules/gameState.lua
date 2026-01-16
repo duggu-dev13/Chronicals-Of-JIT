@@ -226,7 +226,7 @@ function GameState:draw()
         end
         
         if self.phone then
-            self.phone:draw()
+            self.phone:draw(self.careerManager)
         end
         
         if self.travelMenu then
@@ -874,7 +874,21 @@ function GameState:mousepressed(x, y, button)
     if self.travelMenu and self.travelMenu.isOpen then
         local target = self.travelMenu:mousepressed(x, y)
         if target then
+            -- Check Balance
+            local fare = target.moneyCost or 0
+            if self.careerManager and self.careerManager.money < fare then
+                print("Not enough money! Need Rs." .. fare)
+                -- TODO: Show UI Toast
+                return
+            end
+
             self.travelMenu:close()
+            
+            -- Deduct Money
+            if self.careerManager then
+                self.careerManager:spendMoney(fare, "Travel: Bus Fare")
+            end
+
             -- Start Travel Sequence
             self.isTraveling = true
             self.travelTimer = 0

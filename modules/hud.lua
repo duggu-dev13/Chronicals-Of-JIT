@@ -32,7 +32,7 @@ function HUD:draw(timeString, day, money, energy)
     love.graphics.rectangle("fill", 10, 10, 200, 50, 10, 10)
     
     love.graphics.setColor(1, 1, 0, 1) -- Gold for Money
-    love.graphics.print("$" .. (money or 0), 20, 25)
+    love.graphics.print("Rs." .. (money or 0), 20, 25)
     
     -- 3. Bottom Left: Energy Bar
     if energy then

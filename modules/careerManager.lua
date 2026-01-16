@@ -15,19 +15,28 @@ function CareerManager:new()
     obj.jobTitle = "Unemployed"
     obj.experience = 0
     
+    -- Transaction History
+    obj.history = {
+        { desc = "Initial Balance", amount = 500 }
+    }
+    
     setmetatable(obj, self)
     self.__index = self
     return obj
 end
 
-function CareerManager:earnMoney(amount)
+function CareerManager:earnMoney(amount, reason)
     self.money = self.money + amount
-    -- Play sound effect here
+    table.insert(self.history, 1, { desc = reason or "Earnings", amount = amount })
+    -- Limit history to 20 items
+    if #self.history > 20 then table.remove(self.history) end
 end
 
-function CareerManager:spendMoney(amount)
+function CareerManager:spendMoney(amount, reason)
     if self.money >= amount then
         self.money = self.money - amount
+        table.insert(self.history, 1, { desc = reason or "Spending", amount = -amount })
+        if #self.history > 20 then table.remove(self.history) end
         return true
     end
     return false
@@ -37,8 +46,10 @@ function CareerManager:modifyEnergy(amount)
     self.energy = math.max(0, math.min(self.maxEnergy, self.energy + amount))
 end
 
-function CareerManager:modifyMoney(amount)
+function CareerManager:modifyMoney(amount, reason)
     self.money = self.money + amount
+    table.insert(self.history, 1, { desc = reason or "Adjustment", amount = amount })
+    if #self.history > 20 then table.remove(self.history) end
 end
 
 function CareerManager:setPath(pathName)

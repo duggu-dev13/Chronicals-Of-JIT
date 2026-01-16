@@ -66,7 +66,7 @@ function PhoneOS:mousepressed(x, y, button)
     return false
 end
 
-function PhoneOS:draw()
+function PhoneOS:draw(extraData)
     if not self.isOpen then return end
     
     local sw, sh = love.graphics.getDimensions()
@@ -103,11 +103,9 @@ function PhoneOS:draw()
             love.graphics.setColor(0, 0, 0, 1)
             love.graphics.printf(app.name, ix, iy + iconSize + 5, iconSize, "center")
         end
+    elseif self.currentApp == 'bank' then
+        self:drawBankApp(px, py, phoneW, phoneH, extraData)
     else
-        -- Draw App Placeholder
-        love.graphics.setColor(0.5, 0.5, 0.5, 1)
-        love.graphics.printf("App: " .. self.currentApp, px, py + 200, phoneW, "center")
-        
         -- Back Button
         love.graphics.setColor(0.8, 0.2, 0.2, 1)
         love.graphics.rectangle("fill", px + phoneW/2 - 40, py + phoneH - 40, 80, 30, 5, 5)
@@ -116,6 +114,57 @@ function PhoneOS:draw()
     end
     
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+function PhoneOS:drawBankApp(px, py, w, h, careerManager)
+    -- Header
+    love.graphics.setColor(0.2, 0.8, 0.2, 1)
+    love.graphics.rectangle("fill", px+10, py+10, w-20, 60, 10, 10)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(love.graphics.newFont(24))
+    love.graphics.printf("M-Bank", px, py+25, w, "center")
+    
+    -- Balance
+    local balance = careerManager and careerManager.money or 0
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.setFont(love.graphics.newFont(32))
+    love.graphics.printf("Rs." .. balance, px, py+100, w, "center")
+    love.graphics.setFont(love.graphics.newFont(16))
+    love.graphics.printf("Current Balance", px, py+140, w, "center")
+    
+    -- Transaction History
+    love.graphics.printf("Recent Transactions:", px+20, py+180, w-40, "left")
+    
+    local startY = py + 210
+    if careerManager and careerManager.history then
+        for i, trans in ipairs(careerManager.history) do
+            if i > 5 then break end -- Show last 5 only
+            
+            local y = startY + (i-1)*30
+            
+            -- Description
+            love.graphics.setColor(0.3, 0.3, 0.3, 1)
+            love.graphics.printf(trans.desc, px+20, y, w-100, "left")
+            
+            -- Amount
+            if trans.amount >= 0 then
+                love.graphics.setColor(0, 0.6, 0, 1) -- Green
+                love.graphics.printf("+" .. trans.amount, px+w-80, y, 60, "right")
+            else
+                love.graphics.setColor(0.8, 0, 0, 1) -- Red
+                love.graphics.printf(trans.amount, px+w-80, y, 60, "right")
+            end
+        end
+    else
+        love.graphics.setColor(0.5, 0.5, 0.5, 1)
+        love.graphics.printf("No transactions.", px+20, startY, w-40, "left")
+    end
+    
+    -- Reuse Back Button
+    love.graphics.setColor(0.8, 0.2, 0.2, 1)
+    love.graphics.rectangle("fill", px + w/2 - 40, py + h - 40, 80, 30, 5, 5)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Back", px + w/2 - 40, py + h - 35, 80, "center")
 end
 
 return PhoneOS

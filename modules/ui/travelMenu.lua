@@ -4,8 +4,8 @@ function TravelMenu:new()
     local obj = {}
     obj.isOpen = false
     obj.locations = {
-        { name = "Hostel", map = "maps/hostel.lua", cost = 20 },
-        { name = "College", map = "maps/college_base_map.lua", cost = 20 }
+        { name = "Hostel", map = "maps/hostel.lua", cost = 20, moneyCost = 100 },
+        { name = "College", map = "maps/college_base_map.lua", cost = 20, moneyCost = 100 }
     }
     
     setmetatable(obj, self)
@@ -78,7 +78,7 @@ function TravelMenu:draw()
         
         -- Text
         love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.printf(loc.name .. " (Cost: " .. loc.cost .. "m)", px + 30, btnY + 10, menuW - 60, "left")
+        love.graphics.printf(loc.name .. " (Time: " .. loc.cost .. "m | Fare: Rs." .. (loc.moneyCost or 0) .. ")", px + 30, btnY + 10, menuW - 60, "left")
     end
 end
 

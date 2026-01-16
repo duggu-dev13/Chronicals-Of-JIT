@@ -2,7 +2,7 @@ local StateManager = require 'modules/stateManager'
 local Menu = require 'modules/menu'
 local GameState = require 'modules/gameState'
 local InputManager = require 'modules/inputManager'
-
+            
 local stateManager
 
 function love.load()
