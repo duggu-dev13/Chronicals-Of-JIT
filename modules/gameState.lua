@@ -1,100 +1,75 @@
--- gameState.lua
--- Main game state (the actual gameplay)
-
 local sti = require 'libraries/sti'
-local Camera = require 'libraries/camera'
 local wf = require 'libraries/windfield'
 local Player = require 'modules/player'
-local MapConfigs = require 'data/maps'
-local MapConfigs = require 'data/maps'
-local ResourceManager = require 'modules/resourceManager'
-local TimeSystem = require 'modules/timeSystem'
-local HUD = require 'modules/hud'
-local LocationManager = require 'modules/locationManager'
-local HUD = require 'modules/hud'
-local LocationManager = require 'modules/locationManager'
-local PhoneOS = require 'modules/phone/phoneOS'
 local PhoneOS = require 'modules/phone/phoneOS'
 local CareerManager = require 'modules/careerManager'
 local TravelMenu = require 'modules/ui/travelMenu'
+local MessageManager = require 'modules/messageManager'
+local QuestManager = require 'modules/questManager'
+local ShopMenu = require 'modules/ui/shopMenu' -- Import ShopMenu
 local StudyGame = require 'modules/minigames/studyGame'
-
+local ResourceManager = require 'modules/resourceManager'
 
 local GameState = {}
-    
+
 function GameState:new(stateManager)
-    local obj = {}
-    obj.stateManager = stateManager
-    
-    -- Game variables (moved from main.lua)
-    obj.cam, obj.world, obj.gameMap, obj.player, obj.walls = nil, nil, nil, nil, {}
-    obj.benchRects = {}
-    obj.stageArea = nil
-    obj.debugDraw = false
-    obj.sounds = {}
-    obj.currentMapPath = nil
-    obj.interactAreas = {}
-    obj.currentInteractArea = nil
-    obj.isLoading = false
-    obj.loadingTimer = 0
-    obj.pendingMapLoad = nil
-    obj.selectedCharacter = 'student'
-    obj.playerScaleMultiplier = 1
-    obj.playerScaleMultiplier = 1
-    obj.playerScaleMultiplier = 1
-    obj.mapConfigs = MapConfigs
-    
-    obj.timeSystem = nil
-    obj.hud = nil
-    obj.locationManager = nil
-    obj.phone = nil
-    
-    obj.hud = nil
-    obj.locationManager = nil
-    obj.phone = nil
-    obj.careerManager = nil
-    obj.travelMenu = nil
-    
-    -- Travel Animation State
-    obj.isTraveling = false
-    obj.travelTimer = 0
-    obj.busX = -200
-    obj.travelTarget = nil -- { map = "", spawn = {} }
-    
-    obj.studyGame = nil
-    
-    setmetatable(obj, self)
-    
+    local obj = {
+        stateManager = stateManager,
+        world = nil,
+        gameMap = nil,
+        player = nil,
+        cam = require('libraries/camera')(),
+        mapConfigs = require('data/maps'),
+        currentMapPath = nil,
+        interactAreas = {},
+        currentInteractArea = nil,
+        debugDraw = false,
+        
+        -- Modules
+        timeSystem = require('modules/timeSystem'):new(), -- Global Time
+        hud = require('modules/hud'):new(),
+        phone = nil,
+        careerManager = nil,
+        travelMenu = nil,
+        shopMenu = nil,
+        
+        -- Travel Animation State
+        isTraveling = false,
+        travelTimer = 0,
+        busX = -200,
+        travelTarget = nil,
+        
+        -- Loading State
+        isLoading = false,
+        loadingTimer = 0,
+        pendingMapLoad = nil,
+        
+        -- Stage & Depth
+        stageArea = nil,
+        benchRects = {},
+        walls = {},
+        
+        -- Config
+        playerScaleMultiplier = 1,
+        selectedCharacter = 'student',
+        
+        -- Audio
+        sounds = {}
+    }
     setmetatable(obj, self)
     self.__index = self
     return obj
 end
 
+function GameState:init()
+    -- Initialize things that don't depend on a specific game session
+end
+
 function GameState:enter()
-    -- Initialize game if not already done
-    if not self.gameMap then
-        self:initGame()
-    end
+    self:initGame()
 end
 
 function GameState:initGame()
-    if not self.cam then
-        self.cam = Camera()
-        self.cam.scale = 2  -- Default zoom (will be overridden by map config)
-    end
-    
-    if not self.timeSystem then
-        self.timeSystem = TimeSystem:new()
-    end
-    
-    if not self.hud then
-        self.hud = HUD:new()
-    end
-    
-    if not self.locationManager then
-        self.locationManager = LocationManager:new()
-    end
-    
     if not self.phone then
         self.phone = PhoneOS:new()
     end
@@ -103,10 +78,40 @@ function GameState:initGame()
         self.careerManager = CareerManager:new()
         -- Default path based on selection
         self.careerManager:setPath(self.selectedCharacter)
+        
+        -- Hook up Money Animation
+        self.careerManager.onMoneyChanged = function(amount)
+            if self.hud then self.hud:addMoneyPopup(amount) end
+        end
+    elseif not self.careerManager.onMoneyChanged then
+        -- Ensure callback is set if manager already exists (hot-reload safety)
+        self.careerManager.onMoneyChanged = function(amount)
+            if self.hud then self.hud:addMoneyPopup(amount) end
+        end
+    end
+    
+    if not self.messageManager then
+        self.messageManager = MessageManager:new({
+            onNotify = function(msg) 
+                if self.hud then self.hud:addNotification(msg) end 
+            end
+        })
+    end
+
+    if not self.questManager then
+        self.questManager = QuestManager:new({
+            onNotify = function(msg)
+                if self.hud then self.hud:addNotification(msg) end
+            end
+        })
     end
     
     if not self.travelMenu then
         self.travelMenu = TravelMenu:new()
+    end
+
+    if not self.shopMenu then
+        self.shopMenu = ShopMenu:new(self)
     end
 
     if not self.studyGame then
@@ -127,7 +132,7 @@ function GameState:initGame()
         self.sounds.music:play()
     end
 
-    local initialMap = 'maps/college_base_map.lua'
+    local initialMap = 'maps/hostel.lua'
     local spawn = self:getSpawnPoint(initialMap)
     self:queueMapLoad(initialMap, spawn)
 end
@@ -146,6 +151,17 @@ function GameState:update(dt)
                     -- Fix: Add directly to minutes, not accumulated seconds
                     self.timeSystem:addMinutes(pending.travelCost)
                     print("Travel Cost Applied: " .. pending.travelCost .. " mins")
+                    
+                    -- Energy Cost for Travel (e.g., 0.5 energy per minute of travel?)
+                    -- Let's say flat cost for now or small drain
+                    if self.careerManager then
+                        local energyCost = 5 -- Flat cost per trip
+                        self.careerManager:modifyEnergy(-energyCost)
+                        if self.hud then
+                             -- We might not see this if loading screen is up, but it's fine
+                             -- self.hud:addNotification("Travel fatigue: -" .. energyCost .. " Energy")
+                        end
+                    end
                 end
             end
         end
@@ -178,6 +194,10 @@ function GameState:update(dt)
     if self.studyGame and self.studyGame.isActive then
         self.studyGame:update(dt)
         return -- Skip world updates
+    end
+    
+    if self.hud then
+        self.hud:update(dt)
     end
     
     if self.timeSystem then
@@ -226,11 +246,15 @@ function GameState:draw()
         end
         
         if self.phone then
-            self.phone:draw(self.careerManager)
+            self.phone:draw(self.careerManager, self.messageManager, self.questManager)
         end
         
         if self.travelMenu then
             self.travelMenu:draw()
+        end
+        
+        if self.shopMenu then
+            self.shopMenu:draw()
         end
         
         if self.isTraveling then
@@ -272,6 +296,7 @@ function GameState:keypressed(key, action)
     elseif action == 'interact' then
         if self.phone and self.phone.isOpen then return end
         if self.travelMenu and self.travelMenu.isOpen then return end
+        if self.shopMenu and self.shopMenu.isOpen then return end -- Block interact if shop open
         self:handleInteraction()
     elseif action == 'menu' then
         self.stateManager:setState("menu")
@@ -545,6 +570,19 @@ function GameState:loadMap(mapPath, spawnOverride)
     self:updateCamera()
     self.isLoading = false
     self.loadingTimer = 0
+    
+    -- Quest Updates (Tutorial)
+    if self.questManager then
+        if mapPath ~= 'maps/hostel.lua' then
+            -- Objective 1: Leave Hostel
+            self.questManager:completeObjective("tutorial_01", 1)
+        end
+        
+        if mapPath == 'maps/college_base_map.lua' then
+             -- Objective 2: Go to College
+            self.questManager:completeObjective("tutorial_01", 2)
+        end
+    end
 end
 
 function GameState:updateInteractState()
@@ -622,6 +660,49 @@ function GameState:handleInteraction()
         -- 3. Minigame Trigger
         print("Trigering minigame: " .. tostring(area.type))
         self:startMinigame(area.type)
+        
+    elseif area.action == 'sleep' then
+        -- 4. Sleep Trigger
+        if self.careerManager and self.timeSystem then
+            local currentTime = self.timeSystem.totalMinutes
+            local success, reason = self.careerManager:sleep(currentTime)
+            
+            if success then
+                -- Advance Time (8 hours = 480 mins)
+                self.timeSystem:addMinutes(480)
+                
+                if self.hud then
+                    self.hud:addNotification("You slept well. Energy restored.")
+                end
+            else
+                -- Failed to sleep
+                if self.hud then
+                    self.hud:addNotification(reason or "Cannot sleep now.")
+                end
+            end
+        end
+        
+    elseif area.action == 'eat' then
+        -- 5. Eat Trigger
+        if self.careerManager then
+            local success, reason = self.careerManager:eat()
+            if success then
+                -- Animation handles money notification, but we can add energy one
+                if self.hud then
+                    self.hud:addNotification("Yummy! Energy +20")
+                end
+            else
+                if self.hud then
+                    self.hud:addNotification(reason or "Cannot eat.")
+                end
+            end
+        end
+        
+    elseif area.action == 'shop' then
+        -- 6. Open Shop Menu
+        if self.shopMenu then
+            self.shopMenu:open()
+        end
     end
 end
 
@@ -657,18 +738,20 @@ end
 
 -- ===================== MAP DRAWING =====================
 function GameState:drawMap()
-    local layers = {
-        'Base Floor',
-        'Base Stage Floor',
-        'Floor and Wall Objects',
-        'Base Wall',
-        'Windows',
-        'Wall Objects',
-        'Benches and Vegetation'
-    }
-    for _, layer in ipairs(layers) do
-        if self.gameMap.layers[layer] then
-            self.gameMap:drawLayer(self.gameMap.layers[layer])
+    if self.gameMap.drawLayer then
+        local layers = {
+            'Base Floor',
+            'Base Stage Floor',
+            'Floor and Wall Objects',
+            'Base Wall',
+            'Windows',
+            'Wall Objects',
+            'Benches and Vegetation'
+        }
+        for _, layer in ipairs(layers) do
+            if self.gameMap.layers[layer] then
+                self.gameMap:drawLayer(self.gameMap.layers[layer])
+            end
         end
     end
 end
@@ -677,11 +760,20 @@ end
 function GameState:drawSimpleScene()
     if not self.gameMap then return end
 
-    for _, layer in ipairs(self.gameMap.layers) do
-        if layer.type == "tilelayer" or layer.type == "imagelayer" then
-            love.graphics.setColor(1, 1, 1, 1)
-            self.gameMap:drawLayer(layer)
+    if self.gameMap.layers then
+        for _, layer in ipairs(self.gameMap.layers) do
+            if layer.type == "tilelayer" or layer.type == "imagelayer" then
+                love.graphics.setColor(1, 1, 1, 1)
+                self.gameMap:drawLayer(layer)
+            end
         end
+    elseif self.gameMap.backgroundColor then
+        -- Simple background color (for Canteen)
+        love.graphics.setColor(self.gameMap.backgroundColor)
+        local w = self.gameMap.width * self.gameMap.tilewidth
+        local h = self.gameMap.height * self.gameMap.tileheight
+        love.graphics.rectangle("fill", 0, 0, w, h)
+        love.graphics.setColor(1, 1, 1, 1)
     end
 
     if self.player then
@@ -867,10 +959,22 @@ function GameState:drawBus()
 end
 
 function GameState:mousepressed(x, y, button)
-    if self.phone and self.phone:mousepressed(x, y, button) then
-        return
+    if self.phone and self.phone.isOpen then
+        if self.phone:mousepressed(x, y, button, {
+            career = self.careerManager,
+            time = self.timeSystem,
+            hud = self.hud
+        }) then
+            return -- Phone consumed input
+        end
     end
     
+    if self.shopMenu and self.shopMenu.isOpen then
+        if self.shopMenu:mousepressed(x, y, button) then
+            return -- Shop consumed input
+        end
+    end
+
     if self.travelMenu and self.travelMenu.isOpen then
         local target = self.travelMenu:mousepressed(x, y)
         if target then
@@ -894,44 +998,35 @@ function GameState:mousepressed(x, y, button)
             self.travelTimer = 0
             self.busX = -200
             self.travelTarget = { map = target.map, spawn = nil }
+            return
         end
-        return
     end
 end
 
 function GameState:startMinigame(type)
-    print("startMinigame called with: " .. tostring(type))
+    print("Starting Minigame: " .. tostring(type))
     if type == 'study' then
-        -- Lazy Init if missing (hot-reload fix)
-        if not self.studyGame then
-            print("Lazy initializing StudyGame...")
-            local StudyGame = require 'modules/minigames/studyGame'
-            self.studyGame = StudyGame:new({
-                onComplete = function(score)
-                    self:endMinigame(score)
-                end
-            })
-        end
-        
         if self.studyGame then
-            print("Starting Study Game...")
             self.studyGame:start()
         end
     end
 end
 
 function GameState:endMinigame(score)
-    -- Handle Rewards
-    local rewardMoney = score * 5
-    -- local rewardXp = score * 2
-    
+    print("Minigame Ended. Score: " .. score)
     if self.careerManager then
-        self.careerManager:modifyMoney(rewardMoney)
-        self.careerManager:modifyEnergy(-10)
+        -- Award Money based on score
+        if score > 0 then
+            self.careerManager:earnMoney(score, "Study Session")
+            if self.hud then
+                self.hud:addNotification("Study Complete! Earned Rs." .. score)
+            end
+        else
+            if self.hud then
+                self.hud:addNotification("Study Session Ended.")
+            end
+        end
     end
-    
-    print("Minigame Ended! Score: " .. score .. " Earned: $" .. rewardMoney)
-    -- Optional: transition state or show toast
 end
 
 return GameState

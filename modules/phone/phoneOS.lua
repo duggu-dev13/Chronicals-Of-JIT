@@ -10,7 +10,8 @@ function PhoneOS:new()
         { name = "M-Bank", color = {0.2, 0.8, 0.2}, action = "bank" },
         { name = "Jobs", color = {0.8, 0.5, 0.2}, action = "jobs" },
         { name = "Maps", color = {0.2, 0.2, 0.8}, action = "maps" },
-        { name = "Social", color = {0.8, 0.2, 0.8}, action = "social" }
+        { name = "Social", color = {0.8, 0.2, 0.8}, action = "social" },
+        { name = "ToDo", color = {0.2, 0.6, 0.8}, action = "todo" }
     }
     
     setmetatable(obj, self)
@@ -25,7 +26,7 @@ function PhoneOS:toggle()
     end
 end
 
-function PhoneOS:mousepressed(x, y, button)
+function PhoneOS:mousepressed(x, y, button, context)
     if not self.isOpen then return false end
     
     -- Phone Screen Area (Centered)
@@ -58,6 +59,35 @@ function PhoneOS:mousepressed(x, y, button)
             -- Placeholder Back Button at bottom
             if y > py + phoneH - 50 then
                 self.currentApp = nil
+            elseif self.currentApp == 'jobs' then
+                -- Job 1 Button Detection (Hardcoded coordinates based on draw)
+                -- Button is at: px+w-90, startY+35 (startY = py + 110)
+                -- so y ~ py + 145
+                local startY = py + 110
+                local btnX = px + phoneW - 90
+                local btnY = startY + 35
+                
+                if x >= btnX and x <= btnX + 60 and y >= btnY and y <= btnY + 30 then
+                    -- Execute Job
+                    if context and context.career then
+                        if context.career.energy >= 30 then
+                            context.career:modifyEnergy(-30)
+                            context.career:earnMoney(150, "Freelance Job")
+                            
+                            if context.time then
+                                context.time:addMinutes(120)
+                            end
+                            
+                            if context.hud then
+                                context.hud:addNotification("Job Done! +Rs.150")
+                            end
+                        else
+                            if context.hud then
+                                context.hud:addNotification("Not enough energy!")
+                            end
+                        end
+                    end
+                end
             end
         end
         return true -- Consumed input
@@ -66,7 +96,7 @@ function PhoneOS:mousepressed(x, y, button)
     return false
 end
 
-function PhoneOS:draw(extraData)
+function PhoneOS:draw(extraData, messageManager, questManager)
     if not self.isOpen then return end
     
     local sw, sh = love.graphics.getDimensions()
@@ -105,6 +135,12 @@ function PhoneOS:draw(extraData)
         end
     elseif self.currentApp == 'bank' then
         self:drawBankApp(px, py, phoneW, phoneH, extraData)
+    elseif self.currentApp == 'social' then
+        self:drawSocialApp(px, py, phoneW, phoneH, messageManager)
+    elseif self.currentApp == 'todo' then
+        self:drawTodoApp(px, py, phoneW, phoneH, questManager)
+    elseif self.currentApp == 'jobs' then
+        self:drawJobsApp(px, py, phoneW, phoneH, extraData)
     else
         -- Back Button
         love.graphics.setColor(0.8, 0.2, 0.2, 1)
@@ -159,6 +195,174 @@ function PhoneOS:drawBankApp(px, py, w, h, careerManager)
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
         love.graphics.printf("No transactions.", px+20, startY, w-40, "left")
     end
+    
+    -- Reuse Back Button
+    love.graphics.setColor(0.8, 0.2, 0.2, 1)
+    love.graphics.rectangle("fill", px + w/2 - 40, py + h - 40, 80, 30, 5, 5)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Back", px + w/2 - 40, py + h - 35, 80, "center")
+    love.graphics.printf("Back", px + w/2 - 40, py + h - 35, 80, "center")
+end
+
+function PhoneOS:drawSocialApp(px, py, w, h, messageManager)
+    -- Header
+    love.graphics.setColor(0.8, 0.2, 0.8, 1)
+    love.graphics.rectangle("fill", px+10, py+10, w-20, 60, 10, 10)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(love.graphics.newFont(24))
+    love.graphics.printf("Social", px, py+25, w, "center")
+    
+    -- Messages List
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.setFont(love.graphics.newFont(16))
+    love.graphics.printf("Recent Messages:", px+20, py+80, w-40, "left")
+    
+    local startY = py + 110
+    if messageManager and messageManager.messages then
+        for i, msg in ipairs(messageManager.messages) do
+            if i > 4 then break end -- Show last 4 only
+            
+            local y = startY + (i-1)*70
+            
+            -- Bubble Background
+            love.graphics.setColor(0.95, 0.95, 0.95, 1)
+            love.graphics.rectangle("fill", px+20, y, w-40, 60, 5, 5)
+            
+            -- Sender
+            love.graphics.setColor(0.2, 0.2, 0.8, 1) -- Blue Name
+            love.graphics.setFont(love.graphics.newFont(14))
+            love.graphics.print(msg.sender, px+30, y+5)
+            
+            -- Time
+            love.graphics.setColor(0.5, 0.5, 0.5, 1)
+            love.graphics.printf(msg.time, px+w-80, y+5, 50, "right")
+            
+            -- Preview Text
+            love.graphics.setColor(0.2, 0.2, 0.2, 1)
+            love.graphics.printf(msg.text, px+30, y+25, w-60, "left")
+        end
+    else
+        love.graphics.setColor(0.5, 0.5, 0.5, 1)
+        love.graphics.printf("No messages.", px+20, startY, w-40, "left")
+    end
+    
+    -- Reuse Back Button
+    love.graphics.setColor(0.8, 0.2, 0.2, 1)
+    love.graphics.rectangle("fill", px + w/2 - 40, py + h - 40, 80, 30, 5, 5)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Back", px + w/2 - 40, py + h - 35, 80, "center")
+end
+
+
+
+function PhoneOS:drawTodoApp(px, py, w, h, questManager)
+    -- Header
+    love.graphics.setColor(0.2, 0.6, 0.8, 1)
+    love.graphics.rectangle("fill", px+10, py+10, w-20, 60, 10, 10)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(love.graphics.newFont(24))
+    love.graphics.printf("ToDo List", px, py+25, w, "center")
+    
+    -- Quest List
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.setFont(love.graphics.newFont(16))
+    
+    local startY = py + 80
+    if questManager and questManager.quests then
+        -- Sort quests: Active first, then Completed
+        local sortedQuests = {}
+        for _, quest in pairs(questManager.quests) do
+            table.insert(sortedQuests, quest)
+        end
+        table.sort(sortedQuests, function(a, b) return a.status < b.status end) -- 'active' < 'completed' alphabetically? No.
+        -- 'active' comes before 'completed' alphabetically. So 'active' < 'completed' is true. 
+        
+        for _, quest in ipairs(sortedQuests) do
+                -- Quest Title
+                if quest.status == 'completed' then
+                    love.graphics.setColor(0, 0.6, 0, 1) -- Green for Completed
+                    love.graphics.setFont(love.graphics.newFont(18))
+                    love.graphics.printf(quest.title .. " (Done)", px+20, startY, w-40, "left")
+                else
+                    love.graphics.setColor(0, 0, 0, 1)
+                    love.graphics.setFont(love.graphics.newFont(18))
+                    love.graphics.printf(quest.title, px+20, startY, w-40, "left")
+                end
+                startY = startY + 25
+                
+                -- Description (Only if active)
+                if quest.status == 'active' then
+                    love.graphics.setColor(0.4, 0.4, 0.4, 1)
+                    love.graphics.setFont(love.graphics.newFont(12))
+                    love.graphics.printf(quest.desc, px+20, startY, w-40, "left")
+                    startY = startY + 20
+                    
+                    -- Objectives
+                    for _, obj in ipairs(quest.objectives) do
+                        local status = obj.completed and "[x]" or "[ ]"
+                        if obj.completed then
+                            love.graphics.setColor(0.2, 0.6, 0.2, 1) -- Green for done
+                        else
+                            love.graphics.setColor(0.8, 0.2, 0.2, 1) -- Red for todo
+                        end
+                        love.graphics.printf(status .. " " .. obj.desc, px+30, startY, w-50, "left")
+                        startY = startY + 20
+                    end
+                end
+                
+                startY = startY + 20 -- Gap between quests
+        end
+    else
+        love.graphics.setColor(0.5, 0.5, 0.5, 1)
+        love.graphics.printf("No active tasks.", px+20, startY, w-40, "center")
+    end
+    
+    -- Reuse Back Button
+    love.graphics.setColor(0.8, 0.2, 0.2, 1)
+    love.graphics.rectangle("fill", px + w/2 - 40, py + h - 40, 80, 30, 5, 5)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Back", px + w/2 - 40, py + h - 35, 80, "center")
+end
+
+function PhoneOS:drawJobsApp(px, py, w, h, careerManager)
+     -- Header
+    love.graphics.setColor(0.8, 0.5, 0.2, 1)
+    love.graphics.rectangle("fill", px+10, py+10, w-20, 60, 10, 10)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(love.graphics.newFont(24))
+    love.graphics.printf("Gig Jobs", px, py+25, w, "center")
+    
+    -- Current Energy
+    local energy = careerManager and careerManager.energy or 0
+    love.graphics.setColor(0.2, 0.2, 0.2, 1)
+    love.graphics.setFont(love.graphics.newFont(14))
+    love.graphics.printf("Energy: " .. energy .. "/100", px+20, py+80, w-40, "center")
+    
+    -- Job List
+    local startY = py + 110
+    
+    -- Job 1: Freelance Coding
+    love.graphics.setColor(0.9, 0.9, 0.9, 1)
+    love.graphics.rectangle("fill", px+20, startY, w-40, 100, 5, 5)
+    
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.setFont(love.graphics.newFont(16))
+    love.graphics.print("Freelance Coding", px+30, startY+10)
+    
+    love.graphics.setColor(0.4, 0.4, 0.4, 1)
+    love.graphics.setFont(love.graphics.newFont(12))
+    love.graphics.print("Fix bugs for a client.", px+30, startY+30)
+    love.graphics.print("Earn: Rs. 150", px+30, startY+50)
+    love.graphics.print("Cost: 30 Energy, 2 Hours", px+30, startY+65)
+    
+    -- Work Button (Mockup visual, click handled in mousepressed?? No, PhoneOS doesn't have logic callback yet)
+    -- Wait, PhoneOS needs a way to trigger logic.
+    -- For now, let's put a "Button" zone.
+    
+    love.graphics.setColor(0.2, 0.6, 0.2, 1)
+    love.graphics.rectangle("fill", px+w-90, startY+35, 60, 30, 5, 5)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Do It", px+w-90, startY+40, 60, "center")
     
     -- Reuse Back Button
     love.graphics.setColor(0.8, 0.2, 0.2, 1)

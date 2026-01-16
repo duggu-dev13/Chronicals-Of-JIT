@@ -13,12 +13,12 @@ local MapConfigs = {
                 targetSpawn = { x = 200, y = 100 }
             },
             {
-                -- Manual Gate Zone (Square 1200-2000, 2800-4000)
-                x = 1200, y = 2800, w = 800, h = 1200,
-                prompt = 'Press E to go to Hostel',
+                -- Canteen Entrance (X1100, Y1970)
+                x = 1100, y = 1970, w = 170, h = 260,
+                prompt = 'Press E to Enter Canteen',
                 action = 'load_map',
-                targetMap = 'maps/hostel.lua',
-                targetSpawn = { x = 300, y = 400 }
+                targetMap = 'maps/canteen.lua',
+                targetSpawn = { x = 320, y = 300 }
             }
         }
     },
@@ -28,12 +28,11 @@ local MapConfigs = {
         cameraScale = 4,
         interactions = {
             {
-                -- Exit Zone (Left Edge: 0,100 to 0,400)
-                x = 0, y = 100, w = 50, h = 300,
-                prompt = 'Press E to Exit to College',
-                action = 'load_map',
-                targetMap = 'maps/college_base_map.lua',
-                targetSpawn = { x = 2900, y = 320 }
+                layer = "Door",
+                targetMap = "maps/college_base_map.lua",
+                targetSpawn = { x = 200, y = 300 },
+                prompt = "Go to College",
+                action = "load_map"
             }
         }
     },
@@ -52,9 +51,34 @@ local MapConfigs = {
             {
                 -- Manual Study Table
                 x = 200, y = 200, w = 50, h = 50,
-                prompt = 'Press E to Study',
                 action = 'minigame',
                 type = 'study'
+            },
+            {
+                layer = "Bed",
+                x = 60, y = 60, w = 40, h = 60,
+                action = "sleep",
+                prompt = "Sleep (Restore Energy)"
+            }
+        }
+    },
+    ['maps/canteen.lua'] = {
+        spawn = { x = 320, y = 300 },
+        cameraScale = 3,
+        interactions = {
+            {
+                name = "Counter",
+                x = 200, y = 100, w = 240, h = 60,
+                prompt = 'Press E for Service',
+                action = 'shop'
+            },
+            {
+                name = "Exit",
+                x = 300, y = 400, w = 40, h = 40,
+                prompt = 'Press E to Leave',
+                 action = 'load_map',
+                targetMap = 'maps/college_base_map.lua',
+                targetSpawn = { x = 1150, y = 2250 }
             }
         }
     }
