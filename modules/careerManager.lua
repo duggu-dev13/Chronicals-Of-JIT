@@ -22,6 +22,12 @@ function CareerManager:new()
     obj.onMoneyChanged = nil -- Callback function
     obj.lastSleepTime = -9999 -- Initialize to allow immediate sleep
     
+    -- RPG Stats
+    obj.knowledge = 0
+    obj.integrity = 50 -- Neutral
+    obj.innovation = 10
+    obj.reputation = 0
+    
     setmetatable(obj, self)
     self.__index = self
     return obj
@@ -99,6 +105,25 @@ function CareerManager:eat()
         return false, "Not enough money."
     end
     return false, "Not enough money."
+end
+
+    return false, "Not enough money."
+end
+
+function CareerManager:gainKnowledge(amount)
+    self.knowledge = self.knowledge + amount
+end
+
+function CareerManager:modifyIntegrity(amount)
+    self.integrity = math.max(0, math.min(100, self.integrity + amount))
+end
+
+function CareerManager:getRank()
+    -- Simple rank based on knowledge/experience
+    if self.knowledge < 50 then return "Novice"
+    elseif self.knowledge < 200 then return "Intermediate"
+    else return "Expert"
+    end
 end
 
 return CareerManager

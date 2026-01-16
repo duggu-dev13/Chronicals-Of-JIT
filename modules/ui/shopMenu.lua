@@ -36,6 +36,13 @@ function ShopMenu:addToCart(item)
     self:calculateTotal()
 end
 
+function ShopMenu:removeFromCart(index)
+    if index >= 1 and index <= #self.cart then
+        table.remove(self.cart, index)
+        self:calculateTotal()
+    end
+end
+
 function ShopMenu:calculateTotal()
     self.totalCost = 0
     for _, item in ipairs(self.cart) do
@@ -126,8 +133,16 @@ function ShopMenu:draw()
     if #self.cart > 0 then
         for i, item in ipairs(self.cart) do
             if i > 8 then break end -- Limit display
+            love.graphics.setColor(0, 0, 0, 1)
             love.graphics.print("- " .. item.name, px + 330, cartY)
-            cartY = cartY + 20
+            
+            -- Remove Button (X)
+            love.graphics.setColor(0.8, 0.2, 0.2, 1)
+            love.graphics.rectangle("fill", px + 530, cartY, 20, 20, 3, 3)
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.print("x", px + 536, cartY)
+            
+            cartY = cartY + 25 -- Increased spacing
         end
     else
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
@@ -221,6 +236,18 @@ function ShopMenu:mousepressed(x, y, button)
     if x >= px + 320 and x <= px + 560 and y >= py + 330 and y <= py + 380 then
         self:checkout()
         return true
+    end
+    
+    -- Cart Remove Buttons
+    local cartY = py + 110
+    for i, item in ipairs(self.cart) do
+        if i > 8 then break end
+        -- Button: px + 530, cartY, 20x20
+        if x >= px + 530 and x <= px + 550 and y >= cartY and y <= cartY + 20 then
+            self:removeFromCart(i)
+            return true
+        end
+        cartY = cartY + 25
     end
     
     return true -- Consume click if inside overlay? Or allow click-out to close?

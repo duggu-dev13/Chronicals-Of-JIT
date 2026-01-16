@@ -7,6 +7,7 @@ local TravelMenu = require 'modules/ui/travelMenu'
 local MessageManager = require 'modules/messageManager'
 local QuestManager = require 'modules/questManager'
 local ShopMenu = require 'modules/ui/shopMenu' -- Import ShopMenu
+local StatusMenu = require 'modules/ui/statusMenu' -- Import StatusMenu
 local StudyGame = require 'modules/minigames/studyGame'
 local ResourceManager = require 'modules/resourceManager'
 
@@ -32,6 +33,7 @@ function GameState:new(stateManager)
         careerManager = nil,
         travelMenu = nil,
         shopMenu = nil,
+        statusMenu = nil,
         
         -- Travel Animation State
         isTraveling = false,
@@ -112,6 +114,10 @@ function GameState:initGame()
 
     if not self.shopMenu then
         self.shopMenu = ShopMenu:new(self)
+    end
+
+    if not self.statusMenu then
+        self.statusMenu = StatusMenu:new(self)
     end
 
     if not self.studyGame then
@@ -257,6 +263,10 @@ function GameState:draw()
             self.shopMenu:draw()
         end
         
+        if self.statusMenu then
+            self.statusMenu:draw()
+        end
+        
         if self.isTraveling then
              self:drawBus()
         end
@@ -285,6 +295,19 @@ function GameState:keypressed(key, action)
         -- but act as sinking input for gameplay keys. 
         -- Actually, returning here prevents 'E' from triggering 'interact' again.
         return 
+    end
+
+    -- Global Keys (Status Menu, Phone)
+    if action == 'status' then
+        if self.statusMenu then
+             self.statusMenu:toggle()
+             return
+        end
+    end
+    
+    if self.statusMenu and self.statusMenu.isOpen then
+        self.statusMenu:keypressed(key)
+        return -- Input Sink
     end
 
     if action == 'debug' then
@@ -891,14 +914,24 @@ function GameState:drawYSortedScene()
                         local sx = obj.width / tile.width
                         local sy = obj.height / tile.height
                         love.graphics.draw(image, tile.quad, x, y - obj.height, r, sx, sy)
-                    end 
+                    end
                 end
             else
-                -- Shape object (rect/ellipse) - usually invisible colliders, skip or debug draw
-                if self.debugDraw then
-                     love.graphics.setColor(1, 0, 0, 0.5)
+                -- Shape object (rect/ellipse)
+                -- Draw if debug OR if object is explicitly marked visible
+                if self.debugDraw or obj.visible then
+                     if obj.visible then
+                        love.graphics.setColor(0.6, 0.4, 0.2, 1) -- Wood color default
+                        -- Check properties for color override if needed
+                     else
+                        love.graphics.setColor(1, 0, 0, 0.5) -- Debug Red
+                     end
+                     
                      if obj.shape == 'rectangle' then
                          love.graphics.rectangle('fill', obj.x, obj.y, obj.width, obj.height)
+                         -- Draw Outline
+                         love.graphics.setColor(0, 0, 0, 1)
+                         love.graphics.rectangle("line", obj.x, obj.y, obj.width, obj.height)
                      end
                 end
             end

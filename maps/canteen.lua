@@ -4,21 +4,21 @@ CanteenMap.width = 20
 CanteenMap.height = 15
 CanteenMap.tilewidth = 32
 CanteenMap.tileheight = 32
+CanteenMap.orientation = "orthogonal"
+CanteenMap.renderorder = "right-down"
 CanteenMap.backgroundColor = {0.9, 0.8, 0.7} -- Light beige/cream color for restaurant vibe
 
 CanteenMap.tilesets = {}
 CanteenMap.layers = {
     {
         name = "Floor",
-        type = "tilelayer",
+        type = "objectgroup", -- Changed to objectgroup to avoid STI parsing 'data'
         x = 0, y = 0,
         width = 20, height = 15,
         visible = true,
         opacity = 1,
         offsetx = 0, offsety = 0,
         properties = {},
-        encoding = "lua",
-        data = {}, 
         objects = {}
     },
     {
@@ -32,10 +32,13 @@ CanteenMap.layers = {
         objects = {
             -- Shop Counter Interaction
             {
+                id = 1,
                 name = "Counter",
-                x = 200, y = 100,
-                width = 240, height = 60, -- Wide counter
+                type = "",
                 shape = "rectangle",
+                x = 200, y = 100,
+                width = 240, height = 60,
+                rotation = 0,
                 visible = true,
                 properties = {}
             }
