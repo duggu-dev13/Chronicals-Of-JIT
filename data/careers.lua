@@ -1,62 +1,80 @@
+-- Career Path Configuration
+-- Defines ranks, salaries, and promotion requirements for each path
+
 local Careers = {
-    professor = {
-        name = "Professor Path",
-        subPaths = {
-            job = {
-                name = "Academic Career",
-                description = "Climb the ladder of academic excellence.",
-                ranks = {
-                    { title = "Lab Assistant", req = { knowledge = 10, reputation = 0 } },
-                    { title = "Lecturer", req = { knowledge = 50, reputation = 10 } },
-                    { title = "Assistant Professor", req = { knowledge = 150, reputation = 30 } },
-                    { title = "Associate Professor", req = { knowledge = 300, reputation = 60 } },
-                    { title = "Professor", req = { knowledge = 500, reputation = 100 } },
-                    { title = "HOD", req = { knowledge = 800, reputation = 200 } },
-                    { title = "Principal", req = { knowledge = 1200, reputation = 400 } },
-                    { title = "Dean", req = { knowledge = 1800, reputation = 700 } },
-                    { title = "Vice-Chancellor", req = { knowledge = 3000, reputation = 1000 } }
+    student = {
+        title = "Student",
+        ranks = {
+            [1] = {
+                id = "freshman",
+                title = "Freshman",
+                salary = 0,
+                desc = "First year student. Focus on basics.",
+                req = {} -- Starting rank
+            },
+            [2] = {
+                id = "sophomore",
+                title = "Sophomore",
+                salary = 50, -- Stipend/Internship
+                desc = "Second year. Eligible for basic internships.",
+                req = {
+                    knowledge = 100,
+                    examsPassed = 1
                 }
             },
-            business = {
-                name = "Educational Entrepreneur",
-                description = "Monetize your knowledge to build an empire.",
-                ranks = {
-                    { title = "Online Tutor", req = { innovation = 10, money = 100 } },
-                    { title = "Content Creator", req = { innovation = 50, money = 500 } },
-                    { title = "Sole Proprietor", req = { innovation = 100, money = 2000 } },
-                    { title = "Small Firm Owner", req = { innovation = 300, money = 10000 } },
-                    { title = "Corporation CEO", req = { innovation = 600, money = 50000 } },
-                    { title = "Group Chairman", req = { innovation = 1500, money = 200000 } },
-                    { title = "Education Minister", req = { innovation = 5000, reputation = 2000 } } -- Ultimate Goal
+            [3] = {
+                id = "junior",
+                title = "Junior Engineer",
+                salary = 150, -- Paid Intern
+                desc = "Third year. working on real projects.",
+                req = {
+                    knowledge = 300,
+                    reputation = 20
+                }
+            },
+            [4] = {
+                id = "senior",
+                title = "Senior Engineer",
+                salary = 500, -- Freelance/Job
+                desc = "Final year. Job ready.",
+                req = {
+                    knowledge = 600,
+                    reputation = 50,
+                    examsPassed = 3
                 }
             }
         }
     },
-    student = {
-        name = "Student Path",
-        subPaths = {
-            specialization = {
-                name = "Startup & Innovation",
-                description = "Create new solutions in Agriculture or Manufacturing.",
-                ranks = {
-                    { title = "Idea Stage", req = { innovation = 20 } },
-                    { title = "Startup Founder", req = { innovation = 100, knowledge = 50 } },
-                    { title = "Small Firm", req = { innovation = 300, money = 5000 } },
-                    { title = "Local Business", req = { innovation = 600, money = 20000 } },
-                    { title = "International Biz", req = { innovation = 1500, money = 100000 } },
-                    { title = "Global Leader", req = { innovation = 5000, money = 1000000 } }
+    
+    professor = {
+        title = "Academic",
+        ranks = {
+            [1] = {
+                id = "assistant",
+                title = "Lab Assistant",
+                salary = 200,
+                desc = "Helping with lab work and grading.",
+                req = {}
+            },
+            [2] = {
+                id = "lecturer",
+                title = "Lecturer",
+                salary = 500,
+                desc = "Conducting classes and lectures.",
+                req = {
+                    knowledge = 200, -- Needs to know stuff to teach
+                    reputation = 50
                 }
             },
-            department = {
-                name = "Corporate Engineering",
-                description = "Work in Civil, Mech, CS, or Electrical sectors.",
-                ranks = {
-                    { title = "Intern", req = { knowledge = 30 } },
-                    { title = "Trainee", req = { knowledge = 80 } },
-                    { title = "Assistant Engineer", req = { knowledge = 200 } },
-                    { title = "Employee", req = { knowledge = 400 } },
-                    { title = "Senior Engineer", req = { knowledge = 800 } },
-                    { title = "Manager", req = { knowledge = 1500 } }
+            [3] = {
+                id = "hod",
+                title = "Head of Dept",
+                salary = 1200,
+                desc = "Managing the entire department.",
+                req = {
+                    knowledge = 800,
+                    reputation = 200,
+                    integrity = 80
                 }
             }
         }

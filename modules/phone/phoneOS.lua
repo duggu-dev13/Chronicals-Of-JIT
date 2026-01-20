@@ -138,7 +138,7 @@ function PhoneOS:mousepressed(x, y, button, context)
     return false
 end
 
-function PhoneOS:draw(extraData, messageManager, questManager, timeSystem)
+function PhoneOS:draw(extraData, messageManager, questManager, timeSystem, player)
     if not self.isOpen then return end
     
     local sw, sh = love.graphics.getDimensions()
@@ -168,6 +168,7 @@ function PhoneOS:draw(extraData, messageManager, questManager, timeSystem)
             elseif self.currentApp == 'social' then self:drawSocialApp(screenX, screenY, screenW, screenH, messageManager)
             elseif self.currentApp == 'todo' then self:drawTodoApp(screenX, screenY, screenW, screenH, questManager)
             elseif self.currentApp == 'jobs' then self:drawJobsApp(screenX, screenY, screenW, screenH, extraData)
+            elseif self.currentApp == 'maps' then self:drawMapsApp(screenX, screenY, screenW, screenH, player)
             end
         end
         
@@ -413,6 +414,61 @@ function PhoneOS:drawJobsApp(x, y, w, h, careerManager)
     love.graphics.rectangle("fill", x + w - 80, jY + 35, 60, 30, 5, 5)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Do It", x + w - 80, jY + 40, 60, "center")
+end
+
+function PhoneOS:drawMapsApp(x, y, w, h, player)
+    -- Map Config
+    local scale = 0.12 -- Map Scale
+    local offsetX = x + w/2 - (1800 * scale) -- Center on Gate (roughly)
+    local offsetY = y + h/2 - (2500 * scale)
+    
+    -- Background (Grass)
+    love.graphics.setColor(0.2, 0.5, 0.2, 1)
+    love.graphics.rectangle("fill", x, y, w, h)
+    
+    -- Clip to Screen
+    love.graphics.setScissor(x, y, w, h)
+    
+    -- Draw Roads / Areas (Simplified)
+    love.graphics.setColor(0.5, 0.5, 0.5, 1)
+    -- Main Road Vertical
+    love.graphics.rectangle("fill", offsetX + 1750*scale, offsetY + 0, 100*scale, 3000*scale)
+    -- Horizontal Road (Canteen)
+    love.graphics.rectangle("fill", offsetX + 1000*scale, offsetY + 2000*scale, 1000*scale, 100*scale)
+    
+    -- Draw Buildings (Rects)
+    -- Canteen
+    love.graphics.setColor(0.8, 0.4, 0.2, 1)
+    love.graphics.rectangle("fill", offsetX + 1100*scale, offsetY + 1800*scale, 200*scale, 200*scale)
+    love.graphics.setColor(1, 1, 1, 1); love.graphics.print("Canteen", offsetX + 1100*scale, offsetY + 1800*scale)
+    
+    -- College Block
+    love.graphics.setColor(0.3, 0.3, 0.8, 1)
+    love.graphics.rectangle("fill", offsetX + 100*scale, offsetY + 100*scale, 600*scale, 400*scale)
+    love.graphics.setColor(1, 1, 1, 1); love.graphics.print("College", offsetX + 100*scale, offsetY + 100*scale)
+    
+    -- Hostel
+    love.graphics.setColor(0.6, 0.2, 0.6, 1)
+    love.graphics.rectangle("fill", offsetX + 2800*scale, offsetY + 500*scale, 300*scale, 300*scale)
+    love.graphics.print("Hostel", offsetX + 2800*scale, offsetY + 500*scale)
+    
+    -- Player Marker
+    if player and player.x then
+        local px = offsetX + player.x * scale
+        local py = offsetY + player.y * scale
+        
+        love.graphics.setColor(0, 0, 1, 1) -- Blue
+        love.graphics.circle("fill", px, py, 6)
+        love.graphics.setColor(1, 1, 1, 0.8)
+        love.graphics.circle("line", px, py, 8)
+    end
+    
+    love.graphics.setScissor() -- Reset Clip
+    
+    -- UI Overlay (Title)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(self.fonts.medium)
+    love.graphics.printf("Campus Map", x, y + 20, w, "center")
 end
 
 return PhoneOS

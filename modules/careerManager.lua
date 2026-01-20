@@ -1,3 +1,5 @@
+local Careers = require 'data/careers'
+
 local CareerManager = {}
 
 function CareerManager:new()
@@ -13,8 +15,10 @@ function CareerManager:new()
     -- Career Path
     obj.path = nil -- 'student' or 'professor'
     obj.department = "CS" -- Default Department
-    obj.jobTitle = "Unemployed"
+    obj.rankIndex = 1
+    obj.jobTitle = "Unemployed" -- Updated by setPath
     obj.experience = 0
+    obj.examsPassed = 0 -- Track exams passed
     
     -- Transaction History
     obj.history = {
@@ -62,6 +66,10 @@ function CareerManager:modifyEnergy(amount)
     self.energy = math.max(0, math.min(self.maxEnergy, self.energy + amount))
 end
 
+function CareerManager:modifyStress(amount)
+    self.stress = math.max(0, math.min(self.maxStress, self.stress + amount))
+end
+
 function CareerManager:modifyMoney(amount, reason)
     self.money = self.money + amount
     table.insert(self.history, 1, { desc = reason or "Adjustment", amount = amount })
@@ -70,11 +78,14 @@ function CareerManager:modifyMoney(amount, reason)
 end
 
 function CareerManager:setPath(pathName)
-    self.path = pathName
-    if pathName == 'student' then
-        self.jobTitle = "Student"
-    elseif pathName == 'professor' then
-        self.jobTitle = "Lab Assistant"
+    if Careers[pathName] then
+        self.path = pathName
+        self.rankIndex = 1
+        local rankData = Careers[pathName].ranks[1]
+        self.jobTitle = rankData.title
+        print("Career Path Set: " .. pathName .. " (" .. self.jobTitle .. ")")
+    else
+        print("Error: Invalid Career Path " .. tostring(pathName))
     end
 end
 
@@ -202,4 +213,60 @@ function CareerManager:getRank()
     end
 end
 
-return CareerManager
+function CareerManager:checkPromotion()
+    if not self.path or not Careers[self.path] then return end
+    
+    local pathData = Careers[self.path]
+    local nextRankIndex = self.rankIndex + 1
+    local nextRank = pathData.ranks[nextRankIndex]
+    
+    if not nextRank then return false, "Max Rank Reached" end
+    
+    -- Check Requirements
+    local reqs = nextRank.req
+    local meetsAll = true
+    local missing = ""
+    
+    if reqs.knowledge and self.knowledge < reqs.knowledge then
+        meetsAll = false
+        missing = missing .. "Knowledge (" .. self.knowledge .. "/" .. reqs.knowledge .. ") "
+    end
+    
+    if reqs.reputation and self.reputation < reqs.reputation then
+        meetsAll = false
+        missing = missing .. "Reputation (" .. self.reputation .. "/" .. reqs.reputation .. ") "
+    end
+    
+    if reqs.examsPassed and self.examsPassed < reqs.examsPassed then
+        meetsAll = false
+        missing = missing .. "Exams (" .. self.examsPassed .. "/" .. reqs.examsPassed .. ") "
+    end
+    
+    if meetsAll then
+        self:promote(nextRankIndex)
+        return true, "Promoted to " .. nextRank.title .. "!"
+    else
+        return false, "Requirements: " .. missing
+    end
+end
+
+function CareerManager:promote(newIndex)
+    self.rankIndex = newIndex
+    local rankData = Careers[self.path].ranks[newIndex]
+    self.jobTitle = rankData.title
+    
+    -- Grant Bonus Money?
+    self:earnMoney(200, "Promotion Bonus")
+    
+    print("PROMOTION! New Rank: " .. self.jobTitle)
+end
+
+function CareerManager:getCurrentRankData()
+    if self.path and Careers[self.path] then
+        return Careers[self.path].ranks[self.rankIndex]
+    end
+    return nil
+end
+
+function CareerManager:getNextRankData()
+    if self.path and Careers[se

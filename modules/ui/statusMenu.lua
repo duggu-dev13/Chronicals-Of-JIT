@@ -45,11 +45,21 @@ function StatusMenu:draw()
     
     love.graphics.setColor(0.6, 0.6, 0.6, 1)
     love.graphics.setFont(love.graphics.newFont(16))
-    love.graphics.print("Rank: " .. career:getRank(), leftX, topY + 30)
     
-    love.graphics.setColor(0.6, 0.6, 0.6, 1)
-    love.graphics.setFont(love.graphics.newFont(16))
-    love.graphics.print("Rank: " .. career:getRank(), leftX, topY + 30)
+    local _, reqText = career:checkPromotion()
+    love.graphics.print("Rank: " .. career.jobTitle, leftX, topY + 30)
+    
+    -- Show Next Promotion
+    local nextRank = career:getNextRankData()
+    if nextRank then
+        love.graphics.setColor(0.4, 0.8, 0.4, 1)
+        love.graphics.print("Next: " .. nextRank.title, leftX, topY + 60)
+        
+        love.graphics.setColor(1, 1, 0, 1) -- Yellow for text
+        love.graphics.print(reqText, leftX, topY + 80)
+    else
+        love.graphics.print("Max Rank Reached", leftX, topY + 60)
+    end
     
     -- Removed Avatar Placeholder as requested
     

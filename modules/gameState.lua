@@ -14,6 +14,7 @@ local StoryManager = require 'modules/storyManager' -- Story/Prologue
 local FormMenu = require 'modules/ui/formMenu' -- Admission Form
 local ResourceManager = require 'modules/resourceManager'
 local NPCManager = require 'modules/npcManager'
+local ClassroomManager = require 'modules/classroomManager'
 
 local GameState = {}
 
@@ -151,6 +152,10 @@ function GameState:initGame()
     if not self.npcManager then
         self.npcManager = NPCManager:new(self)
     end
+    
+    if not self.classroomManager then
+        self.classroomManager = ClassroomManager:new(self)
+    end
 
     if not self.sounds.music then
         self.sounds.music = ResourceManager.getSound('sounds/ambience.mp3', 'stream')
@@ -213,6 +218,7 @@ function GameState:update(dt)
         if self.examGame and self.examGame.isActive then self.examGame:update(dt) end -- Update Exam
         if self.formMenu and self.formMenu.isOpen then self.formMenu:update(dt) end
         if self.storyManager and self.storyManager.dialogueActive then self.storyManager:update(dt) end
+        if self.classroomManager and self.classroomManager.isActive then self.classroomManager:update(dt) end
         
         if self.isTraveling then self:updateTravelSequence(dt) end
         
@@ -228,6 +234,10 @@ function GameState:update(dt)
 
     if self.npcManager then
         self.npcManager:update(dt)
+    end
+    
+    if self.classroomManager then
+        self.classroomManager:update(dt)
     end
 
     if self.gameMap and self.gameMap.update then
@@ -255,6 +265,7 @@ function GameState:isInputBlocked()
            (self.examGame and self.examGame.isActive) or -- Block for Exam
            (self.formMenu and self.formMenu.isOpen) or -- Block for Form
            (self.storyManager and self.storyManager.dialogueActive) or -- Block for Story
+           (self.classroomManager and self.classroomManager.isActive) or -- Block for Class
            (self.isTraveling) or
            (self.isLoading)
 end
@@ -297,8 +308,8 @@ function GameState:draw()
         end
         
         if self.phone then
-            -- Updated to pass TimeSystem as 4th argument
-            self.phone:draw(self.careerManager, self.messageManager, self.questManager, self.timeSystem)
+            -- Updated to pass TimeSystem as 4th argument, Player as 5th
+            self.phone:draw(self.careerManager, self.messageManager, self.questManager, self.timeSystem, self.player)
         end
         
         if self.travelMenu then
@@ -334,6 +345,10 @@ function GameState:draw()
         self.formMenu:draw()
     end
     
+    if self.classroomManager then
+        self.classroomManager:draw()
+    end
+    
     if self.storyManager then
         self.storyManager:draw()
     end
@@ -362,6 +377,11 @@ function GameState:keypressed(key, action)
     if self.storyManager and self.storyManager.dialogueActive then
         self.storyManager:keypressed(key)
         -- Story blocks EVERYTHING else
+        return
+    end
+    
+    if self.classroomManager and self.classroomManager.isActive then
+        self.classroomManager:keypressed(key)
         return
     end
     
@@ -780,7 +800,7 @@ function GameState:handleInteraction()
     if area.action == 'load_map' then
         -- 1. Travel Gate (Special Case - ONLY if not in Classroom)
         local isClassroom = self.currentMapPath == 'maps/tileSet.lua'
-        local triggersMenu = (area.name == 'Gate' or (area.prompt and area.prompt:find("Hostel")) or (area.prompt and area.prompt:find("College")))
+        local triggersMenu = (area.type == 'travel' or area.name == 'Gate')
         
         if triggersMenu and self.travelMenu and not isClassroom then
              self.travelMenu:open(self.currentMapPath)
@@ -854,19 +874,41 @@ function GameState:handleInteraction()
         end
         
     elseif area.action == 'class' then
-        -- 7. Attend Class
-        if self.careerManager and self.timeSystem then
-            local success, reason = self.careerManager:attendClass(self.timeSystem)
-            
-            if success then
-                 if self.hud then
-                    self.hud:addNotification(reason)
+        -- 7. Attend Class (New Event System)
+        if self.classroomManager and self.careerManager then
+             -- Check Cooldown (90 mins)
+             local canAttend = true
+             if self.timeSystem and self.careerManager.lastClassTime then
+                 local diff = self.timeSystem:getAbsoluteTime() - self.careerManager.lastClassTime
+                 if diff < 90 then
+                     canAttend = false
+                     if self.hud then self.hud:addNotification("Class ended recently. Wait " .. (90 - diff) .. "m.") end
                  end
-            else
-                 if self.hud then
-                    self.hud:addNotification(reason or "Cannot attend class.")
+             end
+
+
+             
+             -- Check Office Hours (9:00 - 16:00)
+             if self.timeSystem then
+                 local timeStr = self.timeSystem:getTimeString()
+                 local hour = tonumber(timeStr:sub(1, 2))
+                 if hour < 9 then
+                     canAttend = false
+                     if self.hud then self.hud:addNotification("Class starts at 9:00 AM.") end
+                 elseif hour >= 16 then
+                      canAttend = false
+                      if self.hud then self.hud:addNotification("Classes are over for today.") end
                  end
-            end
+             end
+
+             if canAttend then
+                 -- Simple check for open hours or energy
+                 if self.careerManager.energy < 15 then
+                     if self.hud then self.hud:addNotification("Too tired for class.") end
+                 else
+                     self.classroomManager:startClass()
+                 end
+             end
         end
     end
 end
@@ -1113,6 +1155,13 @@ function GameState:updateTravelSequence(dt)
         self.isTraveling = false
         if self.travelTarget then
             self:queueMapLoad(self.travelTarget.map, self.travelTarget.spawn)
+            
+            -- Add Travel Time
+            if self.timeSystem then
+                local addedTime = self.travelTarget.cost or 30
+                self.timeSystem:addMinutes(addedTime)
+            end
+            
             self.travelTarget = nil
         end
     end
@@ -1172,7 +1221,7 @@ function GameState:mousepressed(x, y, button)
             self.isTraveling = true
             self.travelTimer = 0
             self.busX = -200
-            self.travelTarget = { map = target.map, spawn = nil }
+            self.travelTarget = { map = target.map, spawn = nil, cost = target.cost }
             return
         end
     end
@@ -1230,8 +1279,15 @@ function GameState:endMinigame(score, type)
                  self.careerManager:modifyReputation(math.ceil(score / 10))
              end
              
+             -- Track Passed Exams
+             if score >= 50 then
+                 self.careerManager.examsPassed = self.careerManager.examsPassed + 1
+                 if self.hud then self.hud:addNotification("Exam Passed! Total: " .. self.careerManager.examsPassed) end
+             else
+                 if self.hud then self.hud:addNotification("Exam Failed. Need 50 to pass.") end
+             end
+             
              if self.hud then
-                self.hud:addNotification("Exam Result: " .. score .. " points!")
                 self.hud:addNotification("Knowledge +" .. knowledgeGain)
              end
         else

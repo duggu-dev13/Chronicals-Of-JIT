@@ -33,6 +33,14 @@ local MapConfigs = {
                 prompt = 'Press E to Scan QR Code',
                 action = 'notice_board',
                 type = 'info'
+            },
+            {
+                -- Main Gate (Travel)
+                x = 1800, y = 2900, w = 400, h = 100, -- South of spawn
+                prompt = 'Press E to Open Travel Menu',
+                action = 'load_map',
+                name = 'Gate',
+                type = 'travel'
             }
         }
     },
@@ -58,9 +66,8 @@ local MapConfigs = {
                 layer = 'Exits',
                 prompt = 'Press E to go to College',
                 action = 'load_map',
-                -- targetMap is ignored if handled by menu logic in GameState, but kept as fallback
-                targetMap = 'maps/college_base_map.lua', 
-                targetSpawn = { x = 2900, y = 320 }
+                name = 'Gate',
+                type = 'travel'
             },
             {
                 -- Manual Study Table
