@@ -10,11 +10,11 @@ function PhoneOS:new()
     obj.signalStrength = 4
     
     obj.apps = {
-        { name = "M-Bank", color = {0.2, 0.8, 0.2}, action = "bank", icon = "💳" },
-        { name = "Jobs", color = {0.8, 0.5, 0.2}, action = "jobs", icon = "💼" },
-        { name = "Maps", color = {0.2, 0.2, 0.8}, action = "maps", icon = "🗺️" },
-        { name = "Social", color = {0.8, 0.2, 0.8}, action = "social", icon = "💬" },
-        { name = "ToDo", color = {0.2, 0.6, 0.8}, action = "todo", icon = "📝" }
+        { name = "M-Bank", color = {0.2, 0.8, 0.2}, action = "bank", icon = "💳", installed = false },
+        { name = "Jobs", color = {0.8, 0.5, 0.2}, action = "jobs", icon = "💼", installed = false },
+        { name = "Maps", color = {0.2, 0.2, 0.8}, action = "maps", icon = "🗺️", installed = true }, -- Maps always available
+        { name = "Social", color = {0.8, 0.2, 0.8}, action = "social", icon = "💬", installed = false },
+        { name = "ToDo", color = {0.2, 0.6, 0.8}, action = "todo", icon = "📝", installed = false }
     }
     
     -- Preload Fonts
@@ -34,6 +34,14 @@ function PhoneOS:new()
     setmetatable(obj, self)
     self.__index = self
     return obj
+end
+
+function PhoneOS:installApp(actionName)
+    for _, app in ipairs(self.apps) do
+        if app.action == actionName or actionName == 'all' then
+            app.installed = true
+        end
+    end
 end
 
 function PhoneOS:update(dt)
@@ -91,8 +99,10 @@ function PhoneOS:mousepressed(x, y, button, context)
                 local ix = startX + col * (iconSize + gap)
                 local iy = startY + row * (iconSize + gap + 20)
                 
-                if x >= ix and x <= ix + iconSize and y >= iy and y <= iy + iconSize then
-                    self.currentApp = app.action
+                if app.installed then -- Only clickable if installed
+                    if x >= ix and x <= ix + iconSize and y >= iy and y <= iy + iconSize then
+                        self.currentApp = app.action
+                    end
                 end
             end
         else
@@ -221,17 +231,19 @@ function PhoneOS:drawHomeScreen(x, y, w, h, timeSystem)
         local ix = startX + col * (iconSize + gap)
         local iy = startY + row * (iconSize + gap + 20)
         
-        -- Icon
-        love.graphics.setColor(app.color)
-        love.graphics.rectangle("fill", ix, iy, iconSize, iconSize, 15, 15) -- Rounded
-        
-        -- Symbol (using emoji text for now, could be images)
-        love.graphics.setColor(1, 1, 1, 1)
-        -- love.graphics.printf(app.icon or "", ix, iy + 15, iconSize, "center") -- Emojis might break font, disabling for safety
-        
-        -- Label
-        love.graphics.setFont(self.fonts.tiny)
-        love.graphics.printf(app.name, ix - 5, iy + iconSize + 5, iconSize + 10, "center")
+        if app.installed then
+            -- Icon
+            love.graphics.setColor(app.color)
+            love.graphics.rectangle("fill", ix, iy, iconSize, iconSize, 15, 15) -- Rounded
+            
+            -- Symbol (using emoji text for now, could be images)
+            love.graphics.setColor(1, 1, 1, 1)
+            -- love.graphics.printf(app.icon or "", ix, iy + 15, iconSize, "center") -- Emojis might break font, disabling for safety
+            
+            -- Label
+            love.graphics.setFont(self.fonts.tiny)
+            love.graphics.printf(app.name, ix - 5, iy + iconSize + 5, iconSize + 10, "center")
+        end
     end
 end
 

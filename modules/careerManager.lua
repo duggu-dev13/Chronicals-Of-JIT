@@ -12,6 +12,7 @@ function CareerManager:new()
     
     -- Career Path
     obj.path = nil -- 'student' or 'professor'
+    obj.department = "CS" -- Default Department
     obj.jobTitle = "Unemployed"
     obj.experience = 0
     
@@ -28,6 +29,10 @@ function CareerManager:new()
     obj.integrity = 50 -- Neutral
     obj.innovation = 10
     obj.reputation = 0
+    
+    -- Study Narrative Tracking
+    obj.studyLog = {} -- List of { absoluteTime, score }
+    obj.proficiency = 0 -- 0.0 to 1.0 (Calculated)
     
     setmetatable(obj, self)
     self.__index = self
@@ -74,18 +79,21 @@ function CareerManager:setPath(pathName)
 end
 
 function CareerManager:sleep(currentTime)
-    if currentTime and (currentTime - self.lastSleepTime < 600) then
-        return false, "Not tired yet."
+    -- currentTime must be ABSOLUTE time from TimeSystem:getAbsoluteTime()
+    local cooldown = 960 -- 16 Hours wait between sleeps
+    
+    if currentTime and (currentTime - self.lastSleepTime < cooldown) then
+        local wait = cooldown - (currentTime - self.lastSleepTime)
+        local waitHours = math.ceil(wait / 60)
+        return false, "Not tired. Wait " .. waitHours .. "h."
     end
 
     self.energy = self.maxEnergy
     self.stress = 0
     if currentTime then
-        self.lastSleepTime = currentTime + 480 -- +8 hours of sleep duration? No, lastSleepTime tracks when they WOKE UP effectively? 
-        -- Wait, logic: "once I slept, for next 10 hours I cant sleep".
-        -- So Record the time sleep started (or ended).
-        -- Let's say currentTime is START of sleep.
-        self.lastSleepTime = currentTime + 480 -- Let's set it to the time they wake up.
+        -- Calculate wake up time slightly better? 
+        -- Or just assume 8 hours always.
+        self.lastSleepTime = currentTime -- Mark when we STARTED sleeping
     end
     return true, "Use TimeSystem to advance"
 end
@@ -117,8 +125,13 @@ function CareerManager:attendClass(timeSystem)
     
     
     -- Calculate hour from totalMinutes (since .hour property doesn't exist)
-    local currentTime = timeSystem.totalMinutes
-    local hour = math.floor(currentTime / 60)
+    -- Use Absolute Time for Cooldown Checks
+    local currentTime = timeSystem:getAbsoluteTime()
+    
+    -- Calculate hour from total minutes for schedule check (09:00 - 14:00)
+    -- We need local time for this, not absolute
+    local localMinutes = timeSystem.totalMinutes
+    local hour = math.floor(localMinutes / 60)
     
     -- Cooldown Check: Class takes 60 mins. Let's force a 30 mins break after it ends.
     -- So subsequent start must be >= start + 60 + 30 = 90 mins later
@@ -141,7 +154,7 @@ function CareerManager:attendClass(timeSystem)
     self:modifyEnergy(-energyCost)
     self:gainKnowledge(10)
     
-    self.lastClassTime = currentTime -- Mark the START time
+    self.lastClassTime = currentTime -- Mark the START time (Absolute)
     timeSystem:addMinutes(60) -- Takes 1 hour
     
     return true, "Attended Lecture. Knowledge +10"
@@ -153,6 +166,32 @@ end
 
 function CareerManager:modifyIntegrity(amount)
     self.integrity = math.max(0, math.min(100, self.integrity + amount))
+end
+
+-- ===================== NARRATIVE AI (STUDY TRACKING) =====================
+
+function CareerManager:logStudySession(absoluteTime, score)
+    table.insert(self.studyLog, { time = absoluteTime, score = score })
+    -- Limit log to last 50 studies
+    if #self.studyLog > 50 then table.remove(self.studyLog, 1) end
+    
+    print(string.format("Narrative Logged: Study at %d (Score: %d)", absoluteTime, score))
+end
+
+function CareerManager:getStudyProficiency()
+    if #self.studyLog == 0 then return 0 end
+    
+    -- Logic: Average score of recent studies, weighted by recency
+    -- For now, simple average of last 5 studies
+    local sum = 0
+    local count = 0
+    for i = #self.studyLog, math.max(1, #self.studyLog - 4), -1 do
+        sum = sum + self.studyLog[i].score
+        count = count + 1
+    end
+    
+    local avg = sum / (count * 100) -- Normalized (max score ~100)
+    return math.min(1.0, avg)
 end
 
 function CareerManager:getRank()

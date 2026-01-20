@@ -17,7 +17,7 @@ function Menu:new(stateManager)
     -- Character Selection
     obj.characterOptions = {
         { text = "Student", characterId = "student", desc = "Balance of Time & Money." },
-        { text = "Scholar", characterId = "teacher", desc = "High Knowledge, Low Energy." }
+        { text = "Professor", characterId = "professor", desc = "High Knowledge, Low Energy." }
     }
     
     -- Settings Options

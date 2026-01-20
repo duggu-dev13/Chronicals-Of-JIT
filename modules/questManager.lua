@@ -11,9 +11,9 @@ function QuestManager:new(config)
     self.__index = self
     
     -- Initialize with Tutorial Quest
-    obj:startQuest("tutorial_01", "First Day", "Welcome to college! Get settled in.")
-    obj:addObjective("tutorial_01", "Leave the Hostel")
-    obj:addObjective("tutorial_01", "Go to College Campus")
+    -- obj:startQuest("tutorial_01", "First Day", "Welcome to college! Get settled in.")
+    -- obj:addObjective("tutorial_01", "Leave the Hostel")
+    -- obj:addObjective("tutorial_01", "Go to College Campus")
     
     return obj
 end

@@ -8,8 +8,12 @@ local MessageManager = require 'modules/messageManager'
 local QuestManager = require 'modules/questManager'
 local ShopMenu = require 'modules/ui/shopMenu' -- Import ShopMenu
 local StatusMenu = require 'modules/ui/statusMenu' -- Import StatusMenu
-local StudyGame = require 'modules/minigames/studyGame'
+local StudyGame = require 'modules/minigames/studyGame' -- Restored Missing Import
+local ExamGame = require 'modules/minigames/examGame' -- New PCG Exam
+local StoryManager = require 'modules/storyManager' -- Story/Prologue
+local FormMenu = require 'modules/ui/formMenu' -- Admission Form
 local ResourceManager = require 'modules/resourceManager'
+local NPCManager = require 'modules/npcManager'
 
 local GameState = {}
 
@@ -128,6 +132,26 @@ function GameState:initGame()
         })
     end
 
+    if not self.examGame then
+        self.examGame = ExamGame:new({
+            onComplete = function(score)
+                self:endMinigame(score, 'exam')
+            end
+        })
+    end
+    
+    if not self.storyManager then
+        self.storyManager = StoryManager:new(self)
+    end
+    
+    if not self.formMenu then
+        self.formMenu = FormMenu:new(self)
+    end
+    
+    if not self.npcManager then
+        self.npcManager = NPCManager:new(self)
+    end
+
     if not self.sounds.music then
         self.sounds.music = ResourceManager.getSound('sounds/ambience.mp3', 'stream')
         if self.sounds.music then
@@ -138,9 +162,14 @@ function GameState:initGame()
         self.sounds.music:play()
     end
 
-    local initialMap = 'maps/hostel.lua'
+    local initialMap = 'maps/college_base_map.lua'
     local spawn = self:getSpawnPoint(initialMap)
     self:queueMapLoad(initialMap, spawn)
+    
+    -- Auto-Start Prologue (Delayed until load finishes)
+    if self.storyManager then
+        self.pendingPrologue = true
+    end
 end
 
 function GameState:update(dt)
@@ -163,28 +192,43 @@ function GameState:update(dt)
                     if self.careerManager then
                         local energyCost = 5 -- Flat cost per trip
                         self.careerManager:modifyEnergy(-energyCost)
-                        if self.hud then
-                             -- We might not see this if loading screen is up, but it's fine
-                             -- self.hud:addNotification("Travel fatigue: -" .. energyCost .. " Energy")
-                        end
                     end
                 end
             end
         end
         return
     end
-
-    if not self.world or not self.player then return end
     
-    -- Pause game world if phone is open (optional design choice)
-    if self.phone and self.phone.isOpen then
-        self.phone:update(dt) -- Update animations
-        -- Don't update world/player/time
+    -- Check Delayed Start
+    if self.pendingPrologue and self.storyManager then
+        self.pendingPrologue = false
+        self.storyManager:startPrologue()
+    end
+    
+    -- ===================== INPUT BLOCKING =====================
+    if self:isInputBlocked() then
+        -- Update ONLY the active blocking element
+        if self.phone and self.phone.isOpen then self.phone:update(dt) end
+        if self.studyGame and self.studyGame.isActive then self.studyGame:update(dt) end
+        if self.examGame and self.examGame.isActive then self.examGame:update(dt) end -- Update Exam
+        if self.formMenu and self.formMenu.isOpen then self.formMenu:update(dt) end
+        if self.storyManager and self.storyManager.dialogueActive then self.storyManager:update(dt) end
+        
+        if self.isTraveling then self:updateTravelSequence(dt) end
+        
+        -- PAUSE World/Player/Time interactions
         return
     end
+    -- ==========================================================
+
+    if not self.world or not self.player then return end
 
     self.world:update(dt)
     self.player:update(dt)
+
+    if self.npcManager then
+        self.npcManager:update(dt)
+    end
 
     if self.gameMap and self.gameMap.update then
         self.gameMap:update(dt)
@@ -193,30 +237,26 @@ function GameState:update(dt)
     self:updateInteractState()
     self:updateCamera()
     
-    if self.isTraveling then
-        self:updateTravelSequence(dt)
-        return -- Skip normal updates
-    end
-    
-    if self.studyGame and self.studyGame.isActive then
-        self.studyGame:update(dt)
-        return -- Skip world updates
-    end
-    
     if self.hud then
         self.hud:update(dt)
     end
     
     if self.timeSystem then
-        -- self.timeSystem:update(dt) -- Disabled for Action-Based Time
-        
-        -- Passive Energy Drain Disabled
-        -- if self.timeSystem.accumulatedTime == 0 then
-             -- if self.careerManager then
-                 -- self.careerManager:modifyEnergy(-0.02)
-             -- end
-        -- end
+         -- Time updates (if any passive logic exists)
     end
+end
+
+function GameState:isInputBlocked()
+    return (self.phone and self.phone.isOpen) or
+           (self.travelMenu and self.travelMenu.isOpen) or
+           (self.shopMenu and self.shopMenu.isOpen) or
+           (self.statusMenu and self.statusMenu.isOpen) or
+           (self.studyGame and self.studyGame.isActive) or
+           (self.examGame and self.examGame.isActive) or -- Block for Exam
+           (self.formMenu and self.formMenu.isOpen) or -- Block for Form
+           (self.storyManager and self.storyManager.dialogueActive) or -- Block for Story
+           (self.isTraveling) or
+           (self.isLoading)
 end
 
 function GameState:draw()
@@ -225,6 +265,11 @@ function GameState:draw()
     
     self.cam:attach()
         self:drawYSortedScene()
+        
+        if self.npcManager then
+            self.npcManager:draw()
+        end
+        
         if self.debugDraw then
             love.graphics.setColor(0, 1, 0, 0.8)
             self.world:draw()
@@ -281,6 +326,17 @@ function GameState:draw()
     if self.studyGame and self.studyGame.isActive then
         self.studyGame:draw()
     end
+    if self.examGame and self.examGame.isActive then
+        self.examGame:draw()
+    end
+    
+    if self.formMenu and self.formMenu.isOpen then
+        self.formMenu:draw()
+    end
+    
+    if self.storyManager then
+        self.storyManager:draw()
+    end
 
     self:drawLoadingOverlay()
     
@@ -296,6 +352,22 @@ function GameState:keypressed(key, action)
         -- but act as sinking input for gameplay keys. 
         -- Actually, returning here prevents 'E' from triggering 'interact' again.
         return 
+    end
+    
+    if self.examGame and self.examGame.isActive then
+        self.examGame:keypressed(key)
+        return
+    end
+    
+    if self.storyManager and self.storyManager.dialogueActive then
+        self.storyManager:keypressed(key)
+        -- Story blocks EVERYTHING else
+        return
+    end
+    
+    if self.formMenu and self.formMenu.isOpen then
+        self.formMenu:keypressed(key)
+        return
     end
 
     -- Global Keys (Status Menu, Phone)
@@ -328,6 +400,20 @@ function GameState:keypressed(key, action)
         -- DEBUG: Force Start Minigame
         print("F8 Pressed: Force Starting Study Game")
         self:startMinigame('study')
+    elseif key == 'f4' then
+        -- DEBUG: Toggle NPC Debug Info
+        if self.npcManager then self.npcManager:toggleDebug() end
+        if self.hud then self.hud:addNotification("Toggled NPC Debug") end
+    elseif key == 'f9' then
+        -- DEBUG: Force Start Exam
+        print("F9 Pressed: Force Starting Exam")
+        self:startMinigame('exam')
+    elseif key == 'f7' then
+        -- DEBUG: Force Start Admission Form
+        if self.formMenu then self.formMenu:open() end
+    elseif key == 'f6' then
+         -- DEBUG: Force Prologue
+         if self.storyManager then self.storyManager:startPrologue() end
     elseif self.studyGame and self.studyGame.isActive then
         self.studyGame:keypressed(key)
     end
@@ -626,6 +712,12 @@ function GameState:loadMap(mapPath, spawnOverride)
         if mapPath == 'maps/college_base_map.lua' then
              -- Objective 2: Go to College
             self.questManager:completeObjective("tutorial_01", 2)
+            
+            -- Spawn NPCs
+            if self.npcManager then
+                self.npcManager:refreshZones(self)
+                self.npcManager:spawnNPCs(10, 1800, 2500)
+            end
         end
     end
 end
@@ -747,6 +839,18 @@ function GameState:handleInteraction()
         -- 6. Open Shop Menu
         if self.shopMenu then
             self.shopMenu:open()
+        end
+        
+    elseif area.action == 'form' then
+        -- 7. Open Admission Form (Prologue)
+        if self.formMenu then
+            self.formMenu:open()
+        end
+        
+    elseif area.action == 'notice_board' then
+        -- 8. Scan QR Code (App Unlock)
+        if self.storyManager then
+            self.storyManager:triggerEvent("install_app")
         end
         
     elseif area.action == 'class' then
@@ -1077,26 +1181,92 @@ end
 function GameState:startMinigame(type)
     print("Starting Minigame: " .. tostring(type))
     if type == 'study' then
+        -- FIXED: Check Energy First
+        if self.careerManager and self.careerManager.energy < 15 then
+            if self.hud then
+                self.hud:addNotification("Too tired to study! Need 15 Energy.")
+            end
+            return
+        end
+        
         if self.studyGame then
-            self.studyGame:start()
+            -- Calculate difficulty from "AI Memory" (CareerManager Log)
+            local prof = 0
+            if self.careerManager and self.careerManager.getStudyProficiency then
+                prof = self.careerManager:getStudyProficiency()
+            end
+            
+            -- Prof 0 (Unpracticed) -> 1.4 Difficulty (Fast)
+            -- Prof 1 (Expert)      -> 0.7 Difficulty (Slow/Easy)
+            local diff = 1.4 - (prof * 0.7)
+            
+            print("Narrative AI Influence: Proficiency " .. prof .. " -> Difficulty " .. diff)
+            self.studyGame:start(diff)
+        end
+    elseif type == 'exam' then
+        if self.examGame then
+            -- Pass Proficiency to generate paper
+            local prof = 0
+            local dept = nil
+            if self.careerManager then 
+                prof = self.careerManager:getStudyProficiency() 
+                dept = self.careerManager.department
+            end
+            print("Generating Exam for proficiency: " .. prof .. " Dept: " .. (dept or "None"))
+            self.examGame:start(prof, dept)
         end
     end
 end
 
-function GameState:endMinigame(score)
-    print("Minigame Ended. Score: " .. score)
+function GameState:endMinigame(score, type)
+    print("Minigame Ended (" .. (type or "study") .. "). Score: " .. score)
     if self.careerManager then
-        -- Award Money based on score
-        if score > 0 then
-            self.careerManager:earnMoney(score, "Study Session")
-            if self.hud then
-                self.hud:addNotification("Study Complete! Earned Rs." .. score)
-            end
+        if type == 'exam' then
+             -- Specific Rewards for Exams
+             local knowledgeGain = score * 2
+             self.careerManager:gainKnowledge(knowledgeGain)
+             -- Use safe call for reputation in case it doesn't exist yet
+             if self.careerManager.modifyReputation then
+                 self.careerManager:modifyReputation(math.ceil(score / 10))
+             end
+             
+             if self.hud then
+                self.hud:addNotification("Exam Result: " .. score .. " points!")
+                self.hud:addNotification("Knowledge +" .. knowledgeGain)
+             end
         else
+            -- Default (Study) Rewards
+            -- 1. Progress Knowledge (Narrative Stats) instead of money
+            local knowledgeGain = math.floor(score / 5)
+            self.careerManager:gainKnowledge(knowledgeGain)
+            
+            -- 2. Log for Persistent Narrative (AI memory)
+            if self.timeSystem then
+                local absTime = self.timeSystem:getAbsoluteTime()
+                self.careerManager:logStudySession(absTime, score)
+            end
+            
+            -- 3. Realistic Resource Deduction
+            self.careerManager:modifyEnergy(-15) -- Fatigue
+            if self.timeSystem then
+                self.timeSystem:addMinutes(120) -- Study takes 2 hours of game time
+            end
+
             if self.hud then
-                self.hud:addNotification("Study Session Ended.")
+                if score > 0 then
+                    local msg = string.format("Study Session: +%d Knowledge, -15 Energy", knowledgeGain)
+                    self.hud:addNotification(msg)
+                else
+                    self.hud:addNotification("Exhausted. Session failed.")
+                end
             end
         end
+    end
+end
+
+function GameState:textinput(t)
+    if self.formMenu and self.formMenu.isOpen then
+        self.formMenu:textinput(t)
     end
 end
 

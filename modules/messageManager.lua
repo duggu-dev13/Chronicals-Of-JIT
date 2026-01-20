@@ -11,10 +11,14 @@ function MessageManager:new(config)
     setmetatable(obj, self)
     self.__index = self
     
-    -- Add initial welcome message
-    obj:receiveMessage("Mom", "Good luck at college! Don't forget to eat and sleep! Love you.", "08:00")
+    -- Initial Messages not sent immediately anymore
+    -- obj:receiveMessage("JIT-Alert", "Welcome to JIT. Check Notice Board for App Unlocks.", "09:00")
     
     return obj
+end
+
+function MessageManager:sendWelcomeMessage()
+    self:receiveMessage("JIT-Alert", "Welcome to JIT. Check Notice Board for App Unlocks.", "09:00")
 end
 
 function MessageManager:receiveMessage(sender, text, timeString)
@@ -24,8 +28,6 @@ function MessageManager:receiveMessage(sender, text, timeString)
         read = false,
         time = timeString or "00:00"
     })
-    self.unreadCount = self.unreadCount + 1
-    
     self.unreadCount = self.unreadCount + 1
     
     -- Play notification sound here

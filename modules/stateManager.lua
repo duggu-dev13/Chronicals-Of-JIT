@@ -65,4 +65,10 @@ function StateManager:mousepressed(x, y, button)
     end
 end
 
+function StateManager:textinput(t)
+    if self.currentState and self.currentState.textinput then
+        self.currentState:textinput(t)
+    end
+end
+
 return StateManager

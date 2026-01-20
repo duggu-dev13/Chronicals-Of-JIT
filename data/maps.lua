@@ -1,6 +1,6 @@
 local MapConfigs = {
     ['maps/college_base_map.lua'] = {
-        spawn = { x = 2900, y = 320 },
+        spawn = { x = 1800, y = 2500 },
         simpleDraw = true,
         playerScale = 4,
         cameraScale = 2,
@@ -13,12 +13,26 @@ local MapConfigs = {
                 targetSpawn = { x = 200, y = 100 }
             },
             {
-                -- Canteen Entrance (X1100, Y1970)
+                -- Canteen Entrance
                 x = 1100, y = 1970, w = 170, h = 260,
                 prompt = 'Press E to Enter Canteen',
                 action = 'load_map',
                 targetMap = 'maps/canteen.lua',
                 targetSpawn = { x = 320, y = 300 }
+            },
+            {
+                -- Admission Desk (New Prologue Area)
+                x = 1800, y = 800, w = 200, h = 100, -- Placeholder coords
+                prompt = 'Press E for Admission',
+                action = 'form',
+                type = 'admission'
+            },
+            {
+                -- Notice Board (App Unlock)
+                x = 1600, y = 2600, w = 100, h = 50, -- Near new spawn
+                prompt = 'Press E to Scan QR Code',
+                action = 'notice_board',
+                type = 'info'
             }
         }
     },
@@ -78,7 +92,8 @@ local MapConfigs = {
                 prompt = 'Press E to Leave',
                  action = 'load_map',
                 targetMap = 'maps/college_base_map.lua',
-                targetSpawn = { x = 1150, y = 2250 }
+                -- Standardized Spawn: Just outside the Canteen door (Entrance was 1100, 1970)
+                targetSpawn = { x = 1100, y = 2050 }
             }
         }
     }

@@ -45,6 +45,10 @@ function love.mousemoved(x, y, dx, dy)
     stateManager:mousemoved(x, y, dx, dy)
 end
 
+function love.textinput(t)
+    stateManager:textinput(t)
+end
+
 function love.mousepressed(x, y, button)
     stateManager:mousepressed(x, y, button)
 end

@@ -16,21 +16,10 @@ function TimeSystem:new()
 end
 
 function TimeSystem:update(dt)
+    -- Action-based time: Check only for pausing or animations if needed.
+    -- Real-time updates are disabled by design.
     if self.paused then return end
-    
-    self.accumulatedTime = self.accumulatedTime + dt
-    
-    -- while self.accumulatedTime >= self.secondsPerGameMinute do
-    --    self.accumulatedTime = self.accumulatedTime - self.secondsPerGameMinute
-    --    self.totalMinutes = self.totalMinutes + 1
-        
-        -- New Day Logic (1440 mins = 24 hours)
-    --    if self.totalMinutes >= 1440 then
-    --        self.totalMinutes = self.totalMinutes - 1440
-    --        self.day = self.day + 1
-            -- TODO: Trigger 'New Day' Event
-    --    end
-    -- end
+    -- self.accumulatedTime = self.accumulatedTime + dt
 end
 
 function TimeSystem:addMinutes(minutes)
@@ -55,6 +44,10 @@ end
 
 function TimeSystem:getDay()
     return self.day
+end
+
+function TimeSystem:getAbsoluteTime()
+    return ((self.day - 1) * 1440) + self.totalMinutes
 end
 
 function TimeSystem:isNight()

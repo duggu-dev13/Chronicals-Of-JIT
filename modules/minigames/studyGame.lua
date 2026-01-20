@@ -19,16 +19,19 @@ function StudyGame:new(callbacks)
     return obj
 end
 
-function StudyGame:start()
+function StudyGame:start(difficulty)
     self.isActive = true
     self.score = 0
     self.timeLeft = 15 -- 15 seconds to study
+    self.difficulty = difficulty or 1.0
     self:nextKey()
 end
 
 function StudyGame:nextKey()
     self.targetKey = self.keys[love.math.random(#self.keys)]
-    self.keyTimer = 2.0 -- Time to press this specific key
+    -- Difficulty scales the time available (Lower difficulty = more time)
+    self.keyBaseTime = 2.0 / self.difficulty
+    self.keyTimer = self.keyBaseTime
 end
 
 function StudyGame:update(dt)
@@ -51,7 +54,6 @@ end
 
 function StudyGame:draw()
     if not self.isActive then return end
-    -- print("Drawing Study Game...") -- Debug spam, but confirms call
     
     local w, h = love.graphics.getDimensions()
     
@@ -76,6 +78,12 @@ function StudyGame:draw()
     love.graphics.printf("Time: " .. math.ceil(self.timeLeft), 0, h/2 - 80, w, 'center')
     love.graphics.printf("Score: " .. self.score, 0, h/2 + 100, w, 'center')
     
+    -- Narrative AI Feedback
+    love.graphics.setColor(1, 1, 1, 0.6)
+    local diffText = self.difficulty < 1 and "Easy (Practiced)" or (self.difficulty > 1 and "Hard (Unpracticed)" or "Normal")
+    love.graphics.printf("Difficulty: " .. diffText, 0, h/2 + 125, w, 'center')
+    love.graphics.setColor(1, 1, 1, 1)
+    
     -- Target Key Prompt
     love.graphics.setFont(self.fontLarge)
     love.graphics.setColor(1, 1, 0, 1)
@@ -84,7 +92,7 @@ function StudyGame:draw()
     
     -- Bar for Key Timer
     local mw = 200
-    local pct = math.max(0, self.keyTimer / 2.0)
+    local pct = math.max(0, self.keyTimer / (self.keyBaseTime or 2.0))
     love.graphics.setColor(1, 0, 0, 1)
     love.graphics.rectangle('fill', w/2 - mw/2, h/2 + 50, mw * pct, 10)
     
