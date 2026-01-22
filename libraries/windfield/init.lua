@@ -738,7 +738,9 @@ function Collider.new(world, collider_type, ...)
     elseif self.type == 'Chain' then
         self.collision_class = (args[3] and args[3].collision_class) or 'Default'
         self.body = love.physics.newBody(self.world.box2d_world, 0, 0, (args[3] and args[3].body_type) or 'dynamic')
-        shape = love.physics.newChainShape(args[1], unpack(args[2]))
+        -- Fix: args[2] is loop (boolean), args[1] is vertices (table)
+        -- Using unpack(args[1]) to support Love2D variable argument style
+        shape = love.physics.newChainShape(args[2], unpack(args[1]))
     end
 
     -- Define collision classes and attach them to fixture and sensor

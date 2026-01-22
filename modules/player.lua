@@ -35,10 +35,12 @@ function Player:new(world, spawn, characterId)
     obj.originX = obj.frameWidth / 2
     obj.originY = obj.frameHeight 
     
-    obj.scaleFactor = obj.config.scaleFactor or (1 / 6)
+    obj.scaleFactor = obj.config.scaleFactor or 0.75
     obj.groundOffset = obj.config.groundOffset or 0
 
     obj.spriteSheet = ResourceManager.getImage(obj.config.sheet)
+    print("DEBUG: Loaded SpriteSheet: " .. obj.config.sheet)
+    print("DEBUG: Dimensions: " .. obj.spriteSheet:getWidth() .. "x" .. obj.spriteSheet:getHeight())
     
     -- Sound setup
     obj.sounds = {}
@@ -148,16 +150,17 @@ function Player:setPosition(x, y)
     self:updatePositionFromCollider()
 end
 
-function Player:getDrawScale(cameraScale, extraScale)
-    return (cameraScale or 1) * self.scaleFactor * (extraScale or 1)
+function Player:getDrawScale(extraScale)
+    -- Ignore Camera Scale. World Units Only.
+    return self.scaleFactor * (extraScale or 1)
 end
 
 function Player:getBottomY()
     return self.y -- Since y is now the feet position
 end
 
-function Player:draw(cameraScale, extraScale)
-    local drawScale = self:getDrawScale(cameraScale, extraScale)
+function Player:draw(extraScale)
+    local drawScale = self:getDrawScale(extraScale)
     self.anim:draw(
         self.spriteSheet,
         self.x, self.y,

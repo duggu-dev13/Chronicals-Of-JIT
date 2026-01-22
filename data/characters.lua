@@ -5,7 +5,7 @@ local CharacterConfigs = {
         frameHeight = 64,
         rows = { right = 1, left = 2, down = 3, up = 4 },
         animSpeed = 0.1,
-        scaleFactor = 1 / 6,
+        scaleFactor = 0.66,
         footstepSound = 'sounds/female_footsteps.mp3'
     },
     teacher = {
@@ -14,7 +14,7 @@ local CharacterConfigs = {
         frameHeight = 64,
         rows = { right = 1, left = 2, down = 3, up = 4 },
         animSpeed = 0.1,
-        scaleFactor = 1 / 6,
+        scaleFactor = 0.66,
         footstepSound = 'sounds/female_footsteps.mp3'
     }
 }

@@ -43,10 +43,12 @@ function InputManager:isPressed(key)
     for action, keys in pairs(self.bindings) do
         for _, k in ipairs(keys) do
             if k == key then
+                print("[InputManager] Key '" .. key .. "' mapped to action '" .. action .. "'")
                 return action
             end
         end
     end
+    print("[InputManager] Key '" .. key .. "' has NO binding.")
     return nil
 end
 

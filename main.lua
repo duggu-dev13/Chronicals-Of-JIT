@@ -34,6 +34,7 @@ end
 -- ===================== INPUT =====================
 function love.keypressed(key)
     local action = InputManager:isPressed(key)
+    if action == 'interact' then print("[Main] 'E' Pressed. Action: " .. tostring(action)) end
     stateManager:keypressed(key, action)
 end
 

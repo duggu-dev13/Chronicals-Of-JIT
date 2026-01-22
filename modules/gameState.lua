@@ -277,10 +277,6 @@ function GameState:draw()
     self.cam:attach()
         self:drawYSortedScene()
         
-        if self.npcManager then
-            self.npcManager:draw()
-        end
-        
         if self.debugDraw then
             love.graphics.setColor(0, 1, 0, 0.8)
             self.world:draw()
@@ -361,31 +357,34 @@ end
 
 function GameState:keypressed(key, action)
     -- PRIORITY: Check Minigame Input FIRST
+    print("[GameState] keypressed: " .. key .. " (" .. tostring(action) .. ") on " .. tostring(self))
+    
     if self.studyGame and self.studyGame.isActive then
+        print("[GameState] Blocked by StudyGame")
         self.studyGame:keypressed(key)
-        -- Don't return, allow other system keys (like F8/Debug) if needed, 
-        -- but act as sinking input for gameplay keys. 
-        -- Actually, returning here prevents 'E' from triggering 'interact' again.
         return 
     end
     
     if self.examGame and self.examGame.isActive then
+         print("[GameState] Blocked by ExamGame")
         self.examGame:keypressed(key)
         return
     end
     
     if self.storyManager and self.storyManager.dialogueActive then
+        print("[GameState] Blocked by StoryManager (Dialogue Active)")
         self.storyManager:keypressed(key)
-        -- Story blocks EVERYTHING else
         return
     end
     
     if self.classroomManager and self.classroomManager.isActive then
+        print("[GameState] Blocked by ClassroomManager")
         self.classroomManager:keypressed(key)
         return
     end
     
     if self.formMenu and self.formMenu.isOpen then
+        print("[GameState] Blocked by FormMenu")
         self.formMenu:keypressed(key)
         return
     end
@@ -410,6 +409,7 @@ function GameState:keypressed(key, action)
             self.phone:toggle()
         end
     elseif action == 'interact' then
+        print("[GameState] Interact Action Received. PhoneOpen: " .. tostring(self.phone and self.phone.isOpen))
         if self.phone and self.phone.isOpen then return end
         if self.travelMenu and self.travelMenu.isOpen then return end
         if self.shopMenu and self.shopMenu.isOpen then return end -- Block interact if shop open
@@ -446,7 +446,7 @@ function GameState:initWalls()
 
     if not self.gameMap or not self.world then return end
 
-    local layersToCheck = { "Walls", "Walls and Buildings" }
+    local layersToCheck = { "Walls", "Walls and Buildings", "College", "Canteen", "Canten" }
 
     for _, layerName in ipairs(layersToCheck) do
         local layer = self.gameMap.layers[layerName]
@@ -455,7 +455,11 @@ function GameState:initWalls()
             local offsetY = layer.offsety or 0
 
             for _, obj in ipairs(layer.objects) do
-                local shape = obj.shape
+                -- User Request: Named objects are Interaction Zones (Non-Wall)
+                if obj.name and obj.name ~= "" then
+                    -- Skip collision generation for named interaction zones
+                else
+                    local shape = obj.shape
                 local x = (obj.x or 0) + offsetX
                 local y = (obj.y or 0) + offsetY
                 local collider = nil
@@ -468,18 +472,50 @@ function GameState:initWalls()
                         })
                     end
                 elseif shape == "ellipse" then
-                    local radius = math.max(obj.width or 0, obj.height or 0) / 2
-                    local cx = x + (obj.width or 0) / 2
-                    local cy = y + (obj.height or 0) / 2
-                    collider = self.world:newCircleCollider(cx, cy, radius)
+                    -- High-Res Ellipse using Chain Loop (Smoother than Polygon)
+                    local rx = (obj.width or 0) / 2
+                    local ry = (obj.height or 0) / 2
+                    local cx = x + rx
+                    local cy = y + ry
+                    
+                    local vertices = {}
+                    local segments = 24 -- 24 points for very smooth loop
+                    for i = 0, segments - 1 do
+                        local angle = (i / segments) * math.pi * 2
+                        local vx = cx + math.cos(angle) * rx
+                        local vy = cy + math.sin(angle) * ry
+                        table.insert(vertices, vx)
+                        table.insert(vertices, vy)
+                    end
+                    
+                    -- Use Chain Collider (Loop) for smooth walls
+                    -- Note: Chain Colliders are hollow (edges only), which is fine for walls.
+                    -- If loop is true, it connects first and last point.
+                    if self.world.newChainCollider then
+                         collider = self.world:newChainCollider(vertices, true)
+                    else
+                         -- Fallback if windfield version differs (should prevent crash)
+                         -- Reduce to 8 for Polygon fallback
+                         local polyVerts = {}
+                         local polySegs = 8
+                         for i = 0, polySegs - 1 do
+                            local angle = (i / polySegs) * math.pi * 2
+                            local vx = cx + math.cos(angle) * rx
+                            local vy = cy + math.sin(angle) * ry
+                            table.insert(polyVerts, vx)
+                            table.insert(polyVerts, vy)
+                         end
+                         collider = self.world:newPolygonCollider(polyVerts)
+                    end
                 end
 
                 if collider then
                     collider:setType("static")
                     table.insert(self.walls, collider)
                 end
-            end
-        end
+            end -- Close else block
+        end -- Close if obj.name block
+    end -- Close for obj loop
     end
 
     -- Add stage area for depth sorting
@@ -565,6 +601,7 @@ function GameState:setSelectedCharacter(characterId)
     end
 end
 
+
 function GameState:prepareNewGame(characterId)
     self:setSelectedCharacter(characterId)
 
@@ -624,7 +661,8 @@ function GameState:collectInteractAreas()
                         x = (obj.x or 0) + offsetX,
                         y = (obj.y or 0) + offsetY,
                         w = obj.width or 0,
-                        h = obj.height or 0
+                        h = obj.height or 0,
+                        shape = obj.shape -- Preserve shape for drawing
                     })
                 end
             end
@@ -651,6 +689,70 @@ function GameState:collectInteractAreas()
             end
         end
     end
+
+    -- 4. Dynamic Tiled Zones (User Named Areas)
+    -- Define Zone Mapping: Name in Tiled -> Action/Prompt
+    local zoneMap = {
+        ["Canteen_Entrance"] = { action = "canteen", prompt = "Press E to Enter Canteen" },
+        ["Library_Entrance"] = { action = "library", prompt = "Press E to Enter Library" },
+        ["Classroom_Entrance"] = { action = "class", prompt = "Press E to Attend Class" },
+        ["Hostel_Entrance"] = { action = "hostel_lobby", prompt = "Press E to Enter Hostel" },
+        ["Notice_Board"] = { action = "notice", prompt = "Press E to Read Notice" },
+        ["Bench_Seat"] = { action = "bench", prompt = "Press E to Sit" },
+        ["Transport_Menu"] = { action = "load_map", type = "travel", prompt = "Press E to Open Map" },
+        ["Garden_Hangout"] = { action = nil, prompt = nil }, -- NPC AI Zone only
+    }
+
+    local layersToScan = { 
+        "College", "Canteen", "Walls and Buildings", "InteractionZones",
+        "Classroom_Entrance", "Canteen_Entrance", "Bench_Seat", "Transport_Menu"
+    }
+    
+    -- Removed debug print loop
+    
+    for _, layerName in ipairs(layersToScan) do
+        local layer = self.gameMap.layers[layerName]
+        if layer and layer.objects then
+            local offsetX = layer.offsetx or 0
+            local offsetY = layer.offsety or 0
+            
+            -- Check if the LAYER itself defines the zone type (e.g. layer "Canteen_Entrance")
+            local layerConfig = zoneMap[layerName]
+
+            for _, obj in ipairs(layer.objects) do
+                -- Priority: 1. Object Properties (Manual Override), 2. Object Name Map, 3. Layer Name Map
+                local config = zoneMap[obj.name] or layerConfig
+                local manualProps = obj.properties or {}
+                
+                -- Construct config from properties if available
+                if manualProps.action then
+                    config = {
+                        action = manualProps.action,
+                        targetMap = manualProps.targetMap,
+                        targetZone = manualProps.targetZone, -- Use zone name instead of coords
+                        prompt = manualProps.prompt,
+                        type = manualProps.type
+                    }
+                end
+                
+                if config and config.action then
+                     table.insert(self.interactAreas, {
+                         name = (obj.name and obj.name ~= "") and obj.name or layerName,
+                         prompt = config.prompt,
+                         action = config.action,
+                         targetMap = config.targetMap,
+                         targetZone = config.targetZone, -- Propagate zone target
+                         type = config.type, -- Fix: Propagate type
+                         x = (obj.x or 0) + offsetX,
+                         y = (obj.y or 0) + offsetY,
+                         w = obj.width or 32,
+                         h = obj.height or 32,
+                         shape = obj.shape
+                     })
+                end
+            end
+        end
+    end
 end
 
 function GameState:queueMapLoad(mapPath, spawn)
@@ -662,7 +764,7 @@ function GameState:queueMapLoad(mapPath, spawn)
 
     self.pendingMapLoad = {
         mapPath = mapPath,
-        spawn = spawn and { x = spawn.x, y = spawn.y } or nil,
+        spawn = spawn and { x = spawn.x, y = spawn.y, zone = spawn.zone } or nil,
         travelCost = travelCost -- Store cost to apply later
     }
     self.isLoading = true
@@ -679,6 +781,10 @@ function GameState:queueMapLoad(mapPath, spawn)
 end
 
 function GameState:loadMap(mapPath, spawnOverride)
+    if self.npcManager then
+        self.npcManager:clearAgents()
+    end
+
     if self.world and self.world.destroy then
         self.world:destroy()
     end
@@ -707,11 +813,28 @@ function GameState:loadMap(mapPath, spawnOverride)
 
     self:initWalls()
     self:collectInteractAreas()
+    
+    -- Phase 6: Sortable Tiles (Rolled back)
+    -- Standard Tiled rendering used.
 
     local validSpawn = {
         x = (spawn and spawn.x) or 200,
         y = (spawn and spawn.y) or 100
     }
+    
+    -- Zone-Based Spawn (Randomized)
+    if spawn and spawn.zone then
+        -- Find the zone in the NEWLY loaded map
+        for _, area in ipairs(self.interactAreas) do
+            if area.name == spawn.zone then
+                -- Pick random point inside zone
+                validSpawn.x = area.x + math.random(0, area.w)
+                validSpawn.y = area.y + math.random(0, area.h)
+                print("[Spawn] Found Zone '" .. spawn.zone .. "'. Random Spawn at: " .. validSpawn.x .. ", " .. validSpawn.y)
+                break
+            end
+        end
+    end
     self.player = Player:new(self.world, validSpawn, self.selectedCharacter)
 
     if self.cam then
@@ -736,8 +859,15 @@ function GameState:loadMap(mapPath, spawnOverride)
             -- Spawn NPCs
             if self.npcManager then
                 self.npcManager:refreshZones(self)
-                self.npcManager:spawnNPCs(10, 1800, 2500)
+                -- Spawn around player start + jitter
+                self.npcManager:spawnNPCs(15, validSpawn.x, validSpawn.y)
             end
+        elseif mapPath == 'maps/hostel.lua' or mapPath == 'maps/canteen.lua' then
+             -- Small population for interiors
+             if self.npcManager then
+                self.npcManager:refreshZones(self)
+                self.npcManager:spawnNPCs(3, validSpawn.x, validSpawn.y)
+             end
         end
     end
 end
@@ -752,9 +882,16 @@ function GameState:updateInteractState()
     local px = colliderX
     local py = self.player.getBottomY and self.player:getBottomY() or ((self.player.y or colliderY) + 16)
 
+    -- DEBUG: Once per second
+    self.debugTimer = (self.debugTimer or 0) + 1
+    if self.debugTimer % 60 == 0 then
+         print(string.format("[Debug] Interact Check: P(%.1f, %.1f) vs %d Areas", px, py, #self.interactAreas))
+    end
+
     for _, area in ipairs(self.interactAreas) do
         if px >= area.x and px <= area.x + area.w and py >= area.y and py <= area.y + area.h then
             self.currentInteractArea = area
+            if self.debugTimer % 60 == 0 then print("  -> INSIDE: " .. (area.name or "Unnamed")) end
             break
         end
     end
@@ -793,6 +930,7 @@ function GameState:drawDebugZones()
 end
 
 function GameState:handleInteraction()
+    print("[GameState] handleInteraction called. Current Area: " .. (self.currentInteractArea and self.currentInteractArea.name or "Nil"))
     if not self.currentInteractArea then return end
 
     local area = self.currentInteractArea
@@ -801,15 +939,31 @@ function GameState:handleInteraction()
         -- 1. Travel Gate (Special Case - ONLY if not in Classroom)
         local isClassroom = self.currentMapPath == 'maps/tileSet.lua'
         local triggersMenu = (area.type == 'travel' or area.name == 'Gate')
+        print("[GameState] Travel Logic: triggersMenu="..tostring(triggersMenu)..", isClassroom="..tostring(isClassroom))
         
         if triggersMenu and self.travelMenu and not isClassroom then
+             print("[GameState] Opening Travel Menu")
              self.travelMenu:open(self.currentMapPath)
              return
         end
         
         -- 2. Normal Map Transition
         if area.targetMap then
-            local spawn = area.targetSpawn or self:getSpawnPoint(area.targetMap)
+            local spawn = nil
+            if area.targetZone then
+                spawn = { zone = area.targetZone }
+            elseif area.targetSpawn then
+                spawn = area.targetSpawn
+            else
+                spawn = self:getSpawnPoint(area.targetMap)
+            end
+
+            -- FIX: Force spawn zone when leaving specific maps (e.g. Canteen -> Main)
+            if self.currentMapPath == 'maps/canteen.lua' and area.targetMap == 'maps/college_base_map.lua' then
+                spawn = { zone = "Canteen_Entrance" }
+                print("[GameState] Leaving Canteen. Forcing Spawn Zone: Canteen_Entrance")
+            end
+            
             self:queueMapLoad(area.targetMap, spawn)
         end
 
@@ -910,6 +1064,42 @@ function GameState:handleInteraction()
                  end
              end
         end
+
+    -- NEW HANDLERS for Tiled Zones
+    elseif area.action == 'canteen' then
+        self:queueMapLoad('maps/canteen.lua', { x = 320, y = 300 })
+        
+    elseif area.action == 'library' then
+        if self.careerManager then
+             if self.careerManager.energy < 15 then
+                 if self.hud then self.hud:addNotification("Too tired to study.") end
+                 return
+             end
+             self:startMinigame('study')
+        end
+        
+    elseif area.action == 'hostel_lobby' then
+        -- Trigger Sleep
+        if self.careerManager and self.timeSystem then
+             local success, reason = self.careerManager:sleep(self.timeSystem.totalMinutes)
+             if success then
+                 self.timeSystem:addMinutes(480)
+                 if self.hud then self.hud:addNotification("Slept at Hostel. Energy Restored.") end
+             else
+                 if self.hud then self.hud:addNotification(reason or "Cannot sleep now.") end
+             end
+        end
+        
+    elseif area.action == 'bench' then
+        if self.careerManager then
+            self.careerManager:modifyEnergy(5)
+            if self.hud then self.hud:addNotification("Rested on bench. +5 Energy.") end
+        end
+        
+    elseif area.action == 'notice' then
+        if self.storyManager then
+            self.storyManager:triggerEvent("install_app")
+        end
     end
 end
 
@@ -985,143 +1175,101 @@ function GameState:drawSimpleScene()
 
     if self.player then
         love.graphics.setColor(1, 1, 1, 1)
-        local cameraScale = self.cam and self.cam.scale or 1
-        self.player:draw(cameraScale, self.playerScaleMultiplier)
+        self.player:draw(self.playerScaleMultiplier)
+    end
+    
+    if self.npcManager and self.npcManager.agents then
+        for _, agent in ipairs(self.npcManager.agents) do
+            agent:draw()
+        end
     end
 end
 
 function GameState:drawYSortedScene()
     if not self.gameMap or not self.player then return end
 
-    local config = self.mapConfigs[self.currentMapPath or ""]
-    
-    -- TEMP: Hostel Floor Fix
-    if self.currentMapPath == 'maps/hostel.lua' then
-        love.graphics.setColor(0.3, 0.25, 0.2, 1) -- Wood color
-        love.graphics.rectangle("fill", 0, 0, 2000, 2000)
-        love.graphics.setColor(1, 1, 1, 1)
-    end
-
-    if config and config.simpleDraw then
-        self:drawSimpleScene()
-        return
-    end
-
-    -- 1. Draw Background Layers (Always behind everything)
-    local backgroundLayers = { 'Base Floor', 'Base Wall', 'Windows', 'Wall Objects', 'Floor and Wall Objects' }
-    for _, layerName in ipairs(backgroundLayers) do
-        if self.gameMap.layers[layerName] then
-            love.graphics.setColor(1, 1, 1, 1)
-            self.gameMap:drawLayer(self.gameMap.layers[layerName])
+    -- Draw Tile Layers (Background) - Only visible ones
+    for _, layer in ipairs(self.gameMap.layers) do
+        if layer.type == "tilelayer" and layer.visible then
+             love.graphics.setColor(1, 1, 1, 1)
+             self.gameMap:drawLayer(layer)
         end
     end
 
-    -- 2. Collect Drawable Objects
     local drawables = {}
+    
+    -- 1. Collect Map Objects
+    for _, layer in ipairs(self.gameMap.layers) do
+        if layer.type == "objectgroup" and layer.objects then
+             local oy = layer.offsety or 0
+             for _, obj in ipairs(layer.objects) do
+                 if obj.gid then -- Visual Tile Object
+                     local sortY = obj.y + oy
+                     table.insert(drawables, {
+                         type = 'mapObj',
+                         obj = obj,
+                         layer = layer,
+                         y = sortY 
+                     })
+                 end
+             end
+        end
+    end
 
-    -- Add Player
+    -- 2. Add Player
     table.insert(drawables, {
         type = 'player',
         obj = self.player,
         y = self.player:getBottomY()
     })
-
-    -- Add Map Objects (Benches, Vegetation, etc.)
-    local objectLayers = { 'Benches and Vegetation' }
-    for _, layerName in ipairs(objectLayers) do
-        local layer = self.gameMap.layers[layerName]
-        if layer and layer.objects then
-            local offsetX = layer.offsetx or 0
-            local offsetY = layer.offsety or 0
-            
-            for _, obj in ipairs(layer.objects) do
-                -- Calculate a "bottom Y" for the object. 
-                local objY = (obj.y or 0) + offsetY
-                
-                -- Tiled objects with GID (images) have Y at bottom-left.
-                -- Shape objects (rectangles) have Y at top-left.
-                if not obj.gid then
-                    objY = objY + (obj.height or 0)
-                end
-
-                table.insert(drawables, {
-                    type = 'mapObject',
-                    obj = obj,
-                    layer = layer, -- Keep reference to layer for drawing tile
-                    y = objY
-                })
-            end
+    
+    -- 3. Add NPCs
+    if self.npcManager and self.npcManager.agents then
+        for _, agent in ipairs(self.npcManager.agents) do
+            table.insert(drawables, {
+                type = 'npc',
+                obj = agent,
+                y = agent.y -- Feet position
+            })
         end
     end
 
-    -- Add Stage Layer (Sorted by its TOP Y)
-    if self.stageArea and self.gameMap.layers['Base Stage Floor'] then
-        table.insert(drawables, {
-            type = 'layer',
-            layer = self.gameMap.layers['Base Stage Floor'],
-            y = self.stageArea.y -- Removed offset to ensure objects 'on' the stage draw in front
-        })
-    end
-
-    -- 3. Sort by Y
+    -- 4. Sort
     table.sort(drawables, function(a, b)
         return a.y < b.y
     end)
 
-    -- 4. Draw Sorted Objects
+    -- 5. Draw
     for _, item in ipairs(drawables) do
+        love.graphics.setColor(1, 1, 1, 1)
+        
         if item.type == 'player' then
-            love.graphics.setColor(1, 1, 1, 1)
-            item.obj:draw(self.cam.scale, self.playerScaleMultiplier)
-        elseif item.type == 'layer' then
-            love.graphics.setColor(1, 1, 1, 1)
-            self.gameMap:drawLayer(item.layer)
-        elseif item.type == 'mapObject' then
-            local obj = item.obj
-            if obj.gid then
-                local tile = self.gameMap.tiles[obj.gid]
-                if tile then
-                    local x = obj.x + (item.layer.offsetx or 0)
-                    local y = obj.y + (item.layer.offsety or 0)
-                    
-                    -- Draw the tile image
-                    local image = tile.image
-                    if not image and tile.tileset then
-                        local tileset = self.gameMap.tilesets[tile.tileset]
-                        if tileset then
-                            image = tileset.image
-                        end
-                    end
-                    if image then
-                        -- Calculate rotation/scale if present
-                        local r = math.rad(obj.rotation or 0)
-                        local sx = obj.width / tile.width
-                        local sy = obj.height / tile.height
-                        love.graphics.draw(image, tile.quad, x, y - obj.height, r, sx, sy)
-                    end
-                end
-            else
-                -- Shape object (rect/ellipse)
-                -- Draw if debug OR if object is explicitly marked visible
-                if self.debugDraw or obj.visible then
-                     if obj.visible then
-                        love.graphics.setColor(0.6, 0.4, 0.2, 1) -- Wood color default
-                        -- Check properties for color override if needed
-                     else
-                        love.graphics.setColor(1, 0, 0, 0.5) -- Debug Red
-                     end
-                     
-                     if obj.shape == 'rectangle' then
-                         love.graphics.rectangle('fill', obj.x, obj.y, obj.width, obj.height)
-                         -- Draw Outline
-                         love.graphics.setColor(0, 0, 0, 1)
-                         love.graphics.rectangle("line", obj.x, obj.y, obj.width, obj.height)
-                     end
-                end
-            end
+            item.obj:draw(self.playerScaleMultiplier)
+        elseif item.type == 'npc' then
+             item.obj:draw()
+        elseif item.type == 'mapObj' then
+             local obj = item.obj
+             local tile = self.gameMap.tiles[obj.gid]
+             if tile then
+                 local x = obj.x + (item.layer.offsetx or 0)
+                 local y = obj.y + (item.layer.offsety or 0)
+                 local image = tile.image
+                 if not image and tile.tileset then
+                     local tileset = self.gameMap.tilesets[tile.tileset]
+                     if tileset then image = tileset.image end
+                 end
+                 if image then
+                     local r = math.rad(obj.rotation or 0)
+                     local sx = obj.width / tile.width
+                     local sy = obj.height / tile.height
+                     -- Draw from Bottom (y - height)
+                     love.graphics.draw(image, tile.quad, x, y - obj.height, r, sx, sy)
+                 end
+             end
         end
     end
 end
+
 
 function GameState:exit()
     -- Clean up game resources if needed
@@ -1320,10 +1468,14 @@ function GameState:endMinigame(score, type)
     end
 end
 
+
+
 function GameState:textinput(t)
     if self.formMenu and self.formMenu.isOpen then
         self.formMenu:textinput(t)
     end
 end
+
+    -- (Cluster function removed in rollback)
 
 return GameState

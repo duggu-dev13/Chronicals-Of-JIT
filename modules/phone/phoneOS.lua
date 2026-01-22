@@ -63,6 +63,16 @@ function PhoneOS:toggle()
     end
 end
 
+function PhoneOS:keypressed(key)
+    if not self.isOpen then return false end
+    -- Future keyboard navigation or shortcuts
+    if key == 'escape' then
+        self:toggle()
+        return true
+    end
+    return false
+end
+
 function PhoneOS:mousepressed(x, y, button, context)
     if not self.isOpen then return false end
     

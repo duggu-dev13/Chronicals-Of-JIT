@@ -41,6 +41,23 @@ CanteenMap.layers = {
                 rotation = 0,
                 visible = true,
                 properties = {}
+            },
+            {
+                id = 2,
+                name = "Exit",
+                type = "",
+                shape = "rectangle",
+                x = 280, y = 400, -- Bottom Center
+                width = 80, height = 40,
+                rotation = 0,
+                visible = true,
+                properties = {
+                    action = "load_map",
+                    targetMap = "maps/college_base_map.lua",
+                    -- SPECIAL: Use 'zone' instead of x/y to trigger random spot in that zone
+                    targetZone = "Canteen_Entrance", 
+                    prompt = "Press E to Leave"
+                }
             }
         }
     }

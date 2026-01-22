@@ -21,6 +21,7 @@ function TravelMenu:new()
 end
 
 function TravelMenu:open(currentMap)
+    print("[TravelMenu] Opening menu. Current Map: " .. tostring(currentMap))
     self.isOpen = true
     self.filteredLocations = {}
     for _, loc in ipairs(self.locations) do

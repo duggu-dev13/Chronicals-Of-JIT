@@ -42,8 +42,11 @@ function StateManager:draw()
 end
 
 function StateManager:keypressed(key, action)
+    print("[StateManager] keypressed: " .. key .. ", State: " .. (self.currentState and "Valid" or "Nil"))
     if self.currentState and self.currentState.keypressed then
         self.currentState:keypressed(key, action)
+    else
+        print("[StateManager] No active state or no keypressed handler!")
     end
 end
 
