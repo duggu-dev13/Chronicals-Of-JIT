@@ -269,4 +269,10 @@ function CareerManager:getCurrentRankData()
 end
 
 function CareerManager:getNextRankData()
-    if self.path and Careers[se
+    if self.path and Careers[self.path] then
+         return Careers[self.path].ranks[self.rankIndex + 1]
+    end
+    return nil
+end
+
+return CareerManager
